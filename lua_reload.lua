@@ -102,6 +102,7 @@ local visitedGlobal = {}
 local queuePreallocationSize = 40000
 local visitedPreallocationSize = 40000
 
+local debug = debug
 local getinfo = debug.getinfo
 local getlocal = debug.getlocal
 local getupvalue = debug.getupvalue
