@@ -394,9 +394,9 @@ local function requireNew(modname)
     if DoesFileExist(fileName) and not fileCache[fileName] then
         local func, msg = loadfileNew(fileName)
         assert(func, msg)
-        local r = func(fileName)
-        package.loaded[modname] = r
-        return r
+        local result = func(modname, fileName)
+        package.loaded[modname] = result
+        return result
     else
         return requireOriginal(modname)
     end
