@@ -391,7 +391,6 @@ local function requireNew(modname)
     end
 
     local fileName = modname:gsub("%.", "/") .. ".lua"
-    print("fileName in required is", fileName, DoesFileExist(fileName), fileCache[fileName] )
     if DoesFileExist(fileName) and not fileCache[fileName] then
         local func, msg = loadfileNew(fileName)
         assert(func, msg)
