@@ -1538,8 +1538,10 @@ local staticTimestamp = 0
 function module.FileGetTimestamp(fileName)
     if lfs then
         return lfs.attributes(fileName, "modification")
-    elseif love then
+    elseif love and love.filesystem.getInfo then
         return love.filesystem.getInfo(fileName).modtime
+    elseif love and love.filesystem.getLastModified then
+        return love.filesystem.getLastModified(fileName)
     else
         staticTimestamp = staticTimestamp + 1
         return staticTimestamp
