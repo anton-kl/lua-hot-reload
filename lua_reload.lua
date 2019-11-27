@@ -406,6 +406,7 @@ local functionSource = setmetatable({}, { __mode = "k" })
 local FindReferences
 FindReferences = function(fileName)
     local references = {}
+    local functions = {}
 
     if log then Log("[ref_search]  Searching for references started") end
 
@@ -609,6 +610,7 @@ FindReferences = function(fileName)
                     link = queueLink[ptr]
                 })
                 references[index] = list
+                functions[currentValue] = true
             end
 
             if not visited[currentValue] then
@@ -651,11 +653,11 @@ FindReferences = function(fileName)
 
     if log then Log("[ref_search]  Finished in", ptr, "steps") end
 
-    return references
+    return references, functions
 end
 
 -- TODO use queueName instead of storing the whole path
-local function traverse(data, fileName)
+local function traverse(data, fileName, references)
     if log then Log("-> traverse", fileName) end
     local storePath = log
     local logContent = log and false
@@ -684,6 +686,9 @@ local function traverse(data, fileName)
         queueLink[size] = link
         if storePath then queuePath[size] = (queuePath[previous] or "") .. "/[" .. tostring(name) .. "]" end
         if logPush then Log("  push [", obj, "] at", size) end
+        if type(obj) == "table" then
+            visited[obj] = true
+        end
     end
     push(data, "data")
 
@@ -695,67 +700,68 @@ local function traverse(data, fileName)
         if storePath then Log(ptr .. ".", queuePath[ptr], "= [", currentValue, "]") end
 
         if currentType == "function" then
-            local target = false
-            local env = getfenv(currentValue)
-            if useGetInfo then
-                local short_src = functionSource[currentValue]
-                if not short_src then
-                    short_src = getinfo(currentValue, "S").short_src
-                    functionSource[currentValue] = short_src
-                end
-                target = short_src == fileName
-            else
-                target = env and env._sourceFileName == fileName
-            end
-            if target then
-                local linedefined = getinfo(currentValue, "S").linedefined
-                if functions[linedefined] then
-                    -- TODO print warning if two functions are defined at the same line
-                    table.insert(functions[linedefined], ptr)
+            if not references[currentValue] then
+                local target = false
+                local env = getfenv(currentValue)
+                if useGetInfo then
+                    local short_src = functionSource[currentValue]
+                    if not short_src then
+                        short_src = getinfo(currentValue, "S").short_src
+                        functionSource[currentValue] = short_src
+                    end
+                    target = short_src == fileName
                 else
-                    functions[linedefined] = { ptr }
+                    target = env and env._sourceFileName == fileName
                 end
+                if target then
+                    local linedefined = getinfo(currentValue, "S").linedefined
+                    if functions[linedefined] then
+                        -- TODO print warning if two functions are defined at the same line
+                        table.insert(functions[linedefined], ptr)
+                    else
+                        functions[linedefined] = { ptr }
+                    end
 
-                -- Note: unlike tables, we push functions even _if they were
-                -- visited_, in order to store all routes to them (see above code)
-                -- this is why we have to check here if we didn't already
-                -- visited this functions, and only then mark it as visited
-                if not visited[currentValue] then
-                    visited[currentValue] = true
-                    local i = 1
-                    while true do
-                        local ln, lv = getupvalue(currentValue, i)
-                        if ln ~= nil then
-                            local upvalueid = upvalueid(currentValue, i)
-                            if upvalues[ln] and upvalues[ln].id ~= upvalueid then
-                                Error("Two different upvalues with the same name found, please rename one of them. Upvalue `"
-                                    .. tostring(ln) .. "` referenced in", GetFuncDesc(upvalues[ln].func),
-                                    "and", GetFuncDesc(currentValue))
+                    -- Note: unlike tables, we push functions even _if they were
+                    -- visited_, in order to store all routes to them (see above code)
+                    -- this is why we have to check here if we didn't already
+                    -- visited this functions, and only then mark it as visited
+                    if not visited[currentValue] then
+                        visited[currentValue] = true
+                        local i = 1
+                        while true do
+                            local ln, lv = getupvalue(currentValue, i)
+                            if ln ~= nil then
+                                local upvalueid = upvalueid(currentValue, i)
+                                if upvalues[ln] and upvalues[ln].id ~= upvalueid then
+                                    Error("Two different upvalues with the same name found, please rename one of them. Upvalue `"
+                                        .. tostring(ln) .. "` referenced in", GetFuncDesc(upvalues[ln].func),
+                                        "and", GetFuncDesc(currentValue))
+                                end
+                                if logContent then Log("  - upvalue [", ln, "] = [", lv, "]") end
+                                upvalues[ln] = {
+                                    id = upvalueid,
+                                    func = currentValue,
+                                    index = i,
+                                    value = lv
+                                }
+                                local vtype = type(lv)
+                                if vtype == "function" or (vtype == "table" and not visited[lv]) then
+                                    -- TODO optimize out the string concatenation
+                                    push(lv, "upvalue " .. ln, ptr, { upvalueName = ln, upvalueIndex = i })
+                                end
+                            else
+                                break
                             end
-                            if logContent then Log("  - upvalue [", ln, "] = [", lv, "]") end
-                            upvalues[ln] = {
-                                id = upvalueid,
-                                func = currentValue,
-                                index = i,
-                                value = lv
-                            }
-                            local vtype = type(lv)
-                            if vtype == "function" or (vtype == "table" and not visited[lv]) then
-                                -- TODO optimize out the string concatenation
-                                push(lv, "upvalue " .. ln, ptr, { upvalueName = ln, upvalueIndex = i })
-                            end
-                        else
-                            break
+                            i = i + 1
                         end
-                        i = i + 1
                     end
                 end
-            end
-            if not visited[env] and env ~= envMetatable then
-                push(env, "env", ptr, { env = currentValue })
+                if not visited[env] and env ~= envMetatable then
+                    push(env, "env", ptr, { env = currentValue })
+                end
             end
         elseif currentType == "table" then
-            visited[currentValue] = true
             tables[currentValue] = ptr
             -- TODO traverse keys?
             for k, v in pairs(currentValue) do
@@ -798,7 +804,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     if log then Log("*** Reloading", fileName, "***") end
 
     if log then Log("\n*** LOOKING FOR REFERENCES ***") end
-    local references = FindReferences(fileName)
+    local references, referencedFunctions = FindReferences(fileName)
 
 
     if log then Log("\n*** PREPARE RETURN VALUES BY INDEX  ***") end
@@ -1002,6 +1008,11 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         trackGlobals = true
         _G = setmetatable({}, envMetatable)
     end
+    -- When traversing the original file, we can get to the references (e.g. via
+    -- following upvalues), and we shouldn't confuse them with new functions,
+    -- but we can't rely on fileIndex on Lua5.2 (some functions may not have it),
+    -- so instead we maintain the list of references, and check if a given
+    -- function isn't is this list
     SetupChunkEnv(chunkOriginal, fileName, 0) -- fileIndex is irrelevant here
     local returnValuesOriginal = GetReturnValues(chunkOriginal())
     if trackGlobals then
@@ -1016,7 +1027,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         if log then Log("  schedule global [", name , "] to be traversed") end
     end
 
-    local fileData1 = traverse(data, fileName)
+    local fileData1 = traverse(data, fileName, referencedFunctions)
 
 
     local file = fileCache[fileName]
@@ -1032,7 +1043,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
             data["global_" .. name] = _G[name]
         end
         local traverseStartingPoint = data
-        local fileData2 = traverse(data, fileName)
+        local fileData2 = traverse(data, fileName, referencedFunctions)
         local detectedTables = {}
 
         local function GetValueByRoute(routeStart, fileData1, traverseStartingPoint)
