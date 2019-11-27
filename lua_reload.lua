@@ -167,9 +167,9 @@ end
 local function setfenvCompat(func, env)
     local i = 1
     while true do
-        local name = debug.getupvalue(func, i)
+        local name = getupvalue(func, i)
         if name == "_ENV" then
-            debug.upvaluejoin(func, i, function() return env end, 1)
+            upvaluejoin(func, i, function() return env end, 1)
             break
         elseif not name then
             break
@@ -182,7 +182,7 @@ end
 local getfenv = getfenv or function(func)
     local i = 1
     while true do
-        local name, val = debug.getupvalue(func, i)
+        local name, val = getupvalue(func, i)
         if name == "_ENV" then
             return val
         elseif not name then
