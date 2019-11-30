@@ -537,11 +537,12 @@ FindReferences = function(fileName)
             if currentType == "function" then
                 local fileName
                 if useGetInfo then
-                    fileName = functionSource[currentValue]
-                    if not fileName then
-                        fileName = getinfo(currentValue, "S").short_src
-                        functionSource[currentValue] = fileName
+                    local info = functionSource[currentValue]
+                    if not info then
+                        info = getinfo(currentValue, "S")
+                        functionSource[currentValue] = info
                     end
+                    fileName = info.short_src
                 else
                     fileName = getfenv(currentValue)._sourceFileName
                 end
@@ -594,12 +595,12 @@ FindReferences = function(fileName)
             local env = getfenv(currentValue)
             target = env and env._sourceFileName == fileName
             if not env and useGetInfo then
-                local short_src = functionSource[currentValue]
-                if not short_src then
-                    short_src = getinfo(currentValue, "S").short_src
-                    functionSource[currentValue] = short_src
+                local info = functionSource[currentValue]
+                if not info then
+                    info = getinfo(currentValue, "S")
+                    functionSource[currentValue] = info
                 end
-                target = short_src == fileName
+                target = info.short_src == fileName
             end
             if target then
                 local index = env and env._sourceFileIndex or 0
@@ -704,17 +705,22 @@ local function traverse(data, fileName, references)
                 local target = false
                 local env = getfenv(currentValue)
                 if useGetInfo then
-                    local short_src = functionSource[currentValue]
-                    if not short_src then
-                        short_src = getinfo(currentValue, "S").short_src
-                        functionSource[currentValue] = short_src
+                    local info = functionSource[currentValue]
+                    if not info then
+                        info = getinfo(currentValue, "S")
+                        functionSource[currentValue] = info
                     end
-                    target = short_src == fileName
+                    target = info.short_src == fileName
                 else
                     target = env and env._sourceFileName == fileName
                 end
                 if target then
-                    local linedefined = getinfo(currentValue, "S").linedefined
+                    local info = functionSource[currentValue]
+                    if not info then
+                        info = getinfo(currentValue, "S")
+                        functionSource[currentValue] = info
+                    end
+                    local linedefined = info.linedefined
                     if functions[linedefined] then
                         -- TODO print warning if two functions are defined at the same line
                         table.insert(functions[linedefined], ptr)
