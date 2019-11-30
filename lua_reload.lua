@@ -14,26 +14,6 @@ TODO:
     3. Override require() function
 ]]
 
-local _pairs = pairs
-function _pairs(t)
-    local keys = {}
-    local num = 0
-    for k, _ in _pairs(t) do
-        table.insert(keys, k)
-        num = num + 1
-    end
-    table.sort(keys, function(a, b)
-        return tostring(a) < tostring(b)
-    end)
-    local i = 0
-    return function()
-        i = i + 1
-        if i <= num then
-            return keys[i], t[keys[i]]
-        end
-    end
-end
-
 -- if "inspect.lua" is accessible - load it
 local inspect
 if loadfile then
