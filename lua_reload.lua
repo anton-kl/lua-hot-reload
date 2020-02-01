@@ -144,7 +144,7 @@ local function GetFuncDesc(func)
 end
 
 -- see https://leafo.net/guides/setfenv-in-lua52-and-above.html
-local function setfenvCompat(func, env)
+local setfenv = setfenv or function(func, env)
     local i = 1
     while true do
         local name = getupvalue(func, i)
@@ -1627,7 +1627,7 @@ end
 
 function module.Inject()
     -- if setfenv isn't accessible, assume we are dealing wih lua5.2+
-    setfenvOriginal = setfenv or setfenvCompat
+    setfenvOriginal = setfenv
     loadfileOriginal = loadfile
     requireOriginal = require
 
