@@ -62,7 +62,7 @@ local useGetInfo = _ENV ~= nil
 -- chunk several times, we may get exactly the same function, down to its address.
 -- This make it practically impossible to determine if two functions are coming
 -- from different versions of the file, or not. Thus each time we are about
--- to execute the chunk, we should make it from scrach first. Example of the issue:
+-- to execute the chunk, we should make it from scratch first. Example of the issue:
 --[[
     function Func()
         return function() return 100 end
@@ -210,11 +210,11 @@ end
 
 local function UpdateReturnValues(file, fileIndex, ...)
     -- Tables created in new versions of a file never get references in the game,
-    -- instead of copying references to tables - we just transer the data from
+    -- instead of copying references to tables - we just transfer the data from
     -- new tables to respective old tables (we match them based on return values
     -- order and some other factors). But new functions are obviously get
     -- referenced in the game, and we update references everywhere in the game,
-    -- we don't to this for returnValues tables (we explicitly skip them while
+    -- we don't do this for returnValues tables (we explicitly skip them while
     -- searching for references, this is why we have to manually remove old
     -- functions references in the returnValues table)
     local returnValues = file.returnValues
