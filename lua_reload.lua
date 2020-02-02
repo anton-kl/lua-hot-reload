@@ -386,7 +386,6 @@ local functionSource = setmetatable({}, { __mode = "k" })
 local FindReferences
 FindReferences = function(fileName)
     local references = {}
-    local functions = {}
 
     if log then Log("[ref_search]  Searching for references started") end
 
@@ -591,7 +590,6 @@ FindReferences = function(fileName)
                     link = queueLink[ptr]
                 })
                 references[index] = list
-                functions[currentValue] = true
             end
 
             if not visited[currentValue] then
@@ -634,11 +632,11 @@ FindReferences = function(fileName)
 
     if log then Log("[ref_search]  Finished in", ptr, "steps") end
 
-    return references, functions
+    return references, visited
 end
 
 -- TODO use queueName instead of storing the whole path
-local function traverse(data, fileName, references)
+local function traverse(data, fileName, visitedDuringSearch)
     if log then Log("-> traverse", fileName) end
     local storePath = log
     local logContent = log and false
@@ -681,7 +679,16 @@ local function traverse(data, fileName, references)
         if storePath then Log(ptr .. ".", queuePath[ptr], "= [", currentValue, "]") end
 
         if currentType == "function" then
-            if not references[currentValue] then
+            -- For LuaJIT:
+            -- Do not traverse a function, if it was defined before the file was
+            -- loaded, cause it 100% doesn't come from the file we loaded
+            -- For vanilla Lua:
+            -- Remember that function with no ENV may have exactly the same
+            -- address in vanilla Lua, so we have to traverse a function even if
+            -- it seems like it existed before we loaded the file
+            if not visitedDuringSearch[currentValue]
+                or (useGetInfo and not getfenv(currentValue))
+            then
                 local target = false
                 local env = getfenv(currentValue)
                 if useGetInfo then
@@ -790,7 +797,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     if log then Log("*** Reloading", fileName, "***") end
 
     if log then Log("\n*** LOOKING FOR REFERENCES ***") end
-    local references, referencedFunctions = FindReferences(fileName)
+    local references, visitedDuringSearch = FindReferences(fileName)
 
 
     if log then Log("\n*** PREPARE RETURN VALUES BY INDEX  ***") end
@@ -1013,7 +1020,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         if log then Log("  schedule global [", name , "] to be traversed") end
     end
 
-    local fileData1 = traverse(data, fileName, referencedFunctions)
+    local fileData1 = traverse(data, fileName, visitedDuringSearch)
 
 
     local file = fileCache[fileName]
@@ -1029,7 +1036,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
             data["global_" .. name] = _G[name]
         end
         local traverseStartingPoint = data
-        local fileData2 = traverse(data, fileName, referencedFunctions)
+        local fileData2 = traverse(data, fileName, visitedDuringSearch)
         local detectedTables = {}
 
         local function GetValueByRoute(routeStart, fileData1, traverseStartingPoint)
