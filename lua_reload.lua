@@ -1256,8 +1256,8 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
                                         end
                                         ignoreUpvalues[ln] = true
                                     elseif isFileScopeFunction and isFileScopeFunction_old then
-                                        error("DEV ERROR: something went wrong... Two different file-scoped functions with two different upvalues with the same name?.\n",
-                                            "We check for this case when we load original file, so this shouldn't happen.")
+                                        error("DEV ERROR: something went wrong... Two different file-scoped functions with two different upvalues with the same name?.\n"
+                                            .. "We check for this case when we load original file, so this shouldn't happen.")
                                     else
                                         -- at this point we know, that one upvalue is from a nested func, and another one from the file-scoped func
                                         if log then Log("Note: There are at least two upvalues with the same name [", ln, "],\n",
