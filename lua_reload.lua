@@ -1597,6 +1597,7 @@ function module.Monitor(step, log)
     local filesNumber = #loadedFilesList
     local filesToMonitor = step and math.min(filesNumber - 1, step) or filesNumber - 1
     local target = monitorPtr + filesToMonitor
+    local reloading = false
     for i = monitorPtr, target do
         local filename = loadedFilesList[i % filesNumber + 1]
         local cached = fileCache[filename]
@@ -1617,6 +1618,7 @@ function module.Monitor(step, log)
                     if success then
                         if log then Log("Reloading", filename, "old timestamp:", cached.timestamp, "new timestamp:", timestamp) end
                         ScheduleReload(filename)
+                        reloading = true
                     else
                         if log then Log("Failed to retrieve lock on a file") end
                     end
@@ -1633,7 +1635,16 @@ function module.Monitor(step, log)
         end
         Log(timeinfo .. "monitored", (filesToMonitor + 1) .. "/" .. filesNumber, "files")
     end
+    if reloading then
+        momentStart = GetTime()
+    end
     ReloadScheduledFiles()
+    if reloading then
+        local duration = GetTime() - momentStart
+        if duration > 0 then
+            Log("Reloading took", string.format("%.3f", duration * 1000) .. "ms" )
+        end
+    end
 end
 
 -- this function is expected to be overridden by the game
