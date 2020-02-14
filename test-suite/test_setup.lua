@@ -46,8 +46,7 @@ end
 function ReloadFileString(text, postfix)
     WriteFileString(text, postfix)
     local fn = GetTestFilename(postfix)
-    LuaReload.ScheduleReload(fn)
-    LuaReload.ReloadScheduledFiles()
+    LuaReload.ReloadFile(fn)
 end
 
 function WriteFunction(func, filename)
@@ -80,8 +79,7 @@ end
 function ReloadFileFunc(func, postfix)
     WriteFileFunc(func, postfix)
     local fn = GetTestFilename(postfix)
-    LuaReload.ScheduleReload(fn)
-    LuaReload.ReloadScheduledFiles()
+    LuaReload.ReloadFile(fn)
 end
 
 LuaReload.FileGetTimestamp = function(filename)

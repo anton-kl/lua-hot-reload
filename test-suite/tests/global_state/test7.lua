@@ -73,8 +73,7 @@ table.remove(list, 1)
 
 WriteFileString(file2)
 local fn = GetTestFilename()
-LuaReload.ScheduleReload(fn)
-LuaReload.ReloadScheduledFiles()
+LuaReload.ReloadFile(fn)
 
 local obj = Module:new(1)
 obj:GetFunc()
@@ -84,8 +83,7 @@ assert(list[1](100) == 1101)
 
 WriteFileString(file3)
 local fn = GetTestFilename()
-LuaReload.ScheduleReload(fn)
-LuaReload.ReloadScheduledFiles()
+LuaReload.ReloadFile(fn)
 
 assert(list[1](100) == 2101)
 

@@ -27,12 +27,9 @@ luaReload.Inject()
 ```
 
 #### Step 3
-When you want to reload a certain file, call `ScheduleReload` to schedule a file to be reloaded, and `ReloadScheduledFiles` to reload all scheduled files now. For example:
+When you want to reload a certain file, just call the `ReloadFile` function:
 ```lua
-local function ReloadFile(filename)
-    luaReload.ScheduleReload(filename)
-    luaReload.ReloadScheduledFiles()
-end
+luaReload.ReloadFile(filename)
 ```
 
 #### Step 4

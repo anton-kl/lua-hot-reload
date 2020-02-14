@@ -76,7 +76,7 @@ local reloading = false
 local toBeReload = {}
 local loadedFilesList = {}
 local returnValuesMt = { __mode = "v" }
-local errorHandler = nil -- overrides HandleLoadError if set
+local customErrorHandler = nil
 
 local visitedGlobal = {}
 local queuePreallocationSize = 40000
@@ -96,7 +96,11 @@ local upvaluejoin = debug.upvaluejoin
 -- that this is the first time we load this file, so we can't use
 -- an older version of it
 local function HandleLoadError(fileName, errorMessage, isReloading)
-    print("ERROR during loading of the " .. fileName .. ": " .. errorMessage .. ". " .. debug.traceback())
+    if customErrorHandler then
+        customErrorHandler(fileName, errorMessage, isReloading)
+    else
+        print("ERROR during loading of the " .. fileName .. ": " .. errorMessage .. ". " .. debug.traceback())
+    end
 end
 
 local reloadTimes = 0
@@ -253,69 +257,91 @@ local function ScheduleReload(fileName)
     end
 end
 
-local loadfileNew -- forward declaration
+local function ReloadFile(fileName)
+    if reloading then
+        ScheduleReload(fileName)
+        return false
+    end
+    local file = fileCache[fileName]
+    assert(file, "DEV ERROR: Reloading a file which doesn't exist in the cache")
 
-local function ReloadScheduledFiles()
-    if not reloading and next(toBeReload) then
-        -- reload all pending files
-        while true do
-            local k, v = next(toBeReload)
-            if k then
-                toBeReload[k] = nil
-                -- TODO: call loadfileOriginal directly here, to simplify the flow
-                loadfileNew(k)
-            else
-                break
-            end
-        end
+    local chunk, errorMessage = loadfileOriginal(fileName)
+
+    if not chunk then
+        HandleLoadError(fileName, errorMessage, true)
+        return false, errorMessage
+    end
+
+    reloading = true
+    Reload(fileName, file.chunk, chunk, file.returnValues)
+    reloading = false
+
+    file.chunk = chunk
+    file.timestamp = module.FileGetTimestamp(fileName)
+
+    return true
+end
+
+local function ReloadScheduledFiles(files)
+    if reloading then return end
+
+    -- reload all pending files
+    while next(toBeReload) do
+        local fileName, _ = next(toBeReload)
+        toBeReload[fileName] = nil
+
+        ReloadFile(fileName)
     end
 end
 
-loadfileNew = function(fileName)
-    local timestamp = module.FileGetTimestamp(fileName)
+local loadfileInternal = function(fileName)
     local file = fileCache[fileName]
     local errorMessage
-    local trace = logTrace and debug.traceback() or ""
+    local timestamp = module.FileGetTimestamp(fileName)
 
-    if not file or timestamp > file.timestamp then
-        local shouldBeReloaded = module.ShouldReload(fileName)
-        if not file then
-            table.insert(loadedFilesList, fileName)
-        end
-        -- do not reload file, if we are reloading a different file right now,
-        -- instead just use an older version of it (if not available - load)
-        if file and reloading and shouldBeReloaded then
+    if file and timestamp > file.timestamp and module.ShouldReload(fileName) then
+        if reloading then
+            -- schedule
             ScheduleReload(fileName)
         else
-            if log then Log("Loading", fileName, trace) end
-            local chunk
-            chunk, errorMessage = loadfileOriginal(fileName)
-            if not chunk then
-                local handler = errorHandler or HandleLoadError
-                handler(fileName, errorMessage, file ~= nil)
-            else
-                local returnValues
-                if file and shouldBeReloaded then
-                    returnValues = file.returnValues
-                    reloading = true
-                    Reload(fileName, file.chunk, chunk, returnValues)
-                    reloading = false
-                else
-                    returnValues = setmetatable({}, returnValuesMt)
-                end
-                file = {
-                    chunk = chunk,
-                    timestamp = timestamp,
-                    returnValues = returnValues
-                }
-                fileCache[fileName] = file
-            end
-
+            -- reload
+            local _
+            _, errorMessage = ReloadFile(fileName)
+            -- reload any files that may have been scheduled for reloading
+            -- during reloading of the above file
             ReloadScheduledFiles()
         end
-    else
+    elseif file then
+        -- cache
         if log then Log("Loading", fileName, "from cache") end
+    else
+        -- load
+        if log then
+            local trace = logTrace and debug.traceback() or ""
+            Log("Loading", fileName, trace)
+        end
+        table.insert(loadedFilesList, fileName)
+        local chunk
+        chunk, errorMessage = loadfileOriginal(fileName)
+        if not chunk then
+            HandleLoadError(fileName, errorMessage, false)
+        else
+            file = {
+                chunk = chunk,
+                timestamp = timestamp,
+                returnValues = setmetatable({}, returnValuesMt)
+            }
+            fileCache[fileName] = file
+        end
     end
+
+    return file, errorMessage
+end
+
+local loadfileNew = function(fileName)
+    -- load the file into the cache (or get from the cache)
+    -- also reload it automatically if it has changed
+    local file, errorMessage = loadfileInternal(fileName)
 
     if file and (not errorMessage or useOldFileOnError) then
         -- we do not return chunk directly, since each time it is executed,
@@ -340,6 +366,9 @@ loadfileNew = function(fileName)
                     os.remove(fileName)
                     os.rename(fileNameTmp, fileName)
                 else
+                    -- TODO if file is scheduled to reload, we may load a newer
+                    -- version of the file here, so the file will exists in
+                    -- different versions in the system, which is wrong
                     chunk = loadfileOriginal(fileName)
                 end
             end
@@ -412,6 +441,7 @@ FindReferences = function(fileName)
     local size = 0
     local visited = preallocateTable and preallocateTable(0, visitedPreallocationSize) or {}
     visited[fileCache] = true
+    visited[fileCache[fileName]] = true
     visited[functionSource] = true
     visited[FindReferences] = true
     if not traverseGlobals then
@@ -445,7 +475,7 @@ FindReferences = function(fileName)
     end
 
     -- capture locals
-    local stackLevel = 4 -- ignore getLocals(1), FindReferences(2) and reload(3)
+    local stackLevel = 4 -- ignore getLocals(1), FindReferences(2) and Reload(3)
     while traverseLocals do
         local info = getinfo(stackLevel, "S")
         if not info then break end
@@ -1512,8 +1542,8 @@ function module.SetHandleGlobalModules(enable)
     handleGlobalModules = enable
 end
 
-function module.SetErrorHandler(_errorHandler)
-    errorHandler = _errorHandler
+function module.SetErrorHandler(errorHandler)
+    customErrorHandler = errorHandler
 end
 
 function module.GetFileCache()
@@ -1611,13 +1641,13 @@ function module.ShouldReload(fileName)
     return true
 end
 
-function module.ScheduleReload(fileName)
+function module.ReloadFile(fileName, ignoreTimestamp)
     -- check if this was loaded at least once (otherwise there is nothing to reload)
     local file = fileCache[fileName]
     if file and module.ShouldReload(fileName) then
         local timestamp = module.FileGetTimestamp(fileName)
-        if timestamp > file.timestamp then
-            ScheduleReload(fileName)
+        if timestamp > file.timestamp or ignoreTimestamp then
+            ReloadFile(fileName)
             return true
         end
     end

@@ -56,8 +56,7 @@ assert(Module.first.second.third.Func() == 1004)
 
 WriteFileString(file2)
 local fn = GetTestFilename()
-LuaReload.ScheduleReload(fn)
-LuaReload.ReloadScheduledFiles()
+LuaReload.ReloadFile(fn)
 
 
 assert(Module.first.second.third.Func() == 2205)

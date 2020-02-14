@@ -31,8 +31,7 @@ assert(GlobalModule.subModule.Func() == 1002)
 
 WriteFileString(file2)
 local fn = GetTestFilename()
-LuaReload.ScheduleReload(fn)
-LuaReload.ReloadScheduledFiles()
+LuaReload.ReloadFile(fn)
 
 assert(GlobalModule.subModule.Func() == 2003)
 assert(GlobalModule.subModule.Func() == 2004)

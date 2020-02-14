@@ -43,8 +43,7 @@ assert(GlobalFunc() == 1004)
 
 WriteFileString(file2)
 local fn = GetTestFilename()
-LuaReload.ScheduleReload(fn)
-LuaReload.ReloadScheduledFiles()
+LuaReload.ReloadFile(fn)
 
 
 assert(GlobalFunc() == 2205)
