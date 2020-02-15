@@ -814,6 +814,150 @@ local function traverse(data, fileName, visitedDuringSearch)
     }
 end
 
+local function SeparateReferencesByUpvalues(references, returnValuesByIndex)
+    local upvalueidToFunc = {}
+    local functionToIndex = {}
+
+    if log then Log("Creating a map [function : fileIndex] based on captured return values") end
+    for index, _returnValues in pairs(returnValuesByIndex) do
+        if not references[index] then
+            if log then Log("  Traverse return values for fileIndex no.", index, "in order to look for functions") end
+            local queue = { _returnValues }
+            local size = 1
+            local visited = {
+                [_G] = true,
+                [_GOriginal] = true,
+                [_returnValues] = true,
+            }
+            local validType = {
+                ["table"] = true,
+                ["function"] = true
+            }
+            local ptr = 0
+            while ptr < size do
+                ptr = ptr + 1
+                local value = queue[ptr]
+                local vtype = type(value)
+                if vtype == "table" then
+                    for k, v in pairs(value) do
+                        if validType[type(k)] and not visited[k] then
+                            size = size + 1
+                            queue[size] = k
+                            visited[k] = true
+                        end
+                        if validType[type(v)] and not visited[v] then
+                            size = size + 1
+                            queue[size] = v
+                            visited[v] = true
+                        end
+                    end
+                elseif vtype == "function" then
+                    if log then Log("   ", GetFuncDesc(value), "is associated with fileIndex", index) end
+                    functionToIndex[value] = index
+                    visited[value] = true
+
+                    local i = 1
+                    while true do
+                        local name, v = getupvalue(value, i)
+                        if name == nil then break end
+
+                        local id = upvalueid(value, i)
+                        upvalueidToFunc[id] = value
+
+                        if validType[type(v)] and not visited[v] then
+                            size = size + 1
+                            queue[size] = v
+                            visited[v] = true
+                        end
+                        i = i + 1
+                    end
+                end
+            end
+        end
+    end
+
+    if log then Log("Separating functions into buckets based on their upvalues") end
+    local refList = references[0]
+    references[0] = nil
+    local index = 0
+
+    for fileIndex, list in pairs(references) do
+        for _, ref in ipairs(list) do
+            local func = ref.value
+            functionToIndex[func] = fileIndex
+
+            if log then Log(" ", GetFuncDesc(func), "is associated with file index", fileIndex) end
+
+            local i = 1
+            while true do
+                if getupvalue(func, i) == nil then
+                    break
+                end
+                local id = upvalueid(func, i)
+                upvalueidToFunc[id] = func
+                i = i + 1
+            end
+        end
+    end
+
+    for _, ref in ipairs(refList) do
+        local func = ref.value
+        local myIndexes = {}
+
+        if log then Log("  Analyzing", GetFuncDesc(func)) end
+
+        local myIndex = functionToIndex[func]
+        if myIndex then
+            myIndexes[myIndex] = true
+            if log then Log("    This function's fileIndex was deduced based on captured return values, and it is", myIndex) end
+        else
+            -- no deduced index for this function, try to find shared upvalues
+            -- with other functions which do have fileIndex associated
+            local i = 1
+            while true do
+                if getupvalue(func, i) == nil then
+                    break
+                end
+
+                local id = upvalueid(func, i)
+                if upvalueidToFunc[id] then
+                    local myIndex = functionToIndex[upvalueidToFunc[id]]
+                    myIndexes[myIndex] = true
+                    if log then Log("    Upvalue with id", id, "is referred to the bucket no.", myIndex) end
+                else
+                    upvalueidToFunc[id] = func
+                    if log then Log("    Upvalue with id", id, "seems to be new") end
+                end
+                i = i + 1
+            end
+
+            local myFirstIndex = next(myIndexes)
+            if myFirstIndex == nil then
+                -- negative file indexes are used for these temporal buckets, to avoid a conflict with real fileIndexes
+                index = index - 1
+                myIndex = index
+                if log then Log("    All upvalues were new, introducing a new bucket with id", myIndex) end
+            else
+                myIndex = myFirstIndex
+                if log then Log("    This function shared upvalues with functions in the bucket no.", myIndex) end
+                for i, _ in pairs(myIndexes) do
+                    if i ~= myIndex then
+                        for _, ref in ipairs(references[i]) do
+                            table.insert(references[myIndex], ref)
+                        end
+                        if log then Log("    Moving all functions from bucket no.", i, "to above bucket,",
+                            "since those functions are sharing upvalues") end
+                        references[i] = nil
+                    end
+                end
+            end
+        end
+        functionToIndex[func] = myIndex
+        references[myIndex] = references[myIndex] or {}
+        table.insert(references[myIndex], ref)
+    end
+end
+
 Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     reloadTimes = reloadTimes + 1
     if log then Log("*** Reloading", fileName, "***") end
@@ -846,152 +990,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     -- same bucket. So essentially it is the same as having file indexes for
     -- those functions, but with additional work required.
     if useGetInfo and references[0] then
-        local upvalueidToFunc = {}
-        local functionToIndex = {}
-
-        if log then Log("Creating a map [function : fileIndex] based on captured return values") end
-        for index, _returnValues in pairs(returnValuesByIndex) do
-            if not references[index] then
-                if log then Log("  Traverse return values for fileIndex no.", index, "in order to look for functions") end
-                local queue = { _returnValues }
-                local size = 1
-                local visited = {
-                    [_G] = true,
-                    [_GOriginal] = true,
-                    [_returnValues] = true,
-                }
-                local validType = {
-                    ["table"] = true,
-                    ["function"] = true
-                }
-                local ptr = 0
-                while ptr < size do
-                    ptr = ptr + 1
-                    local value = queue[ptr]
-                    local vtype = type(value)
-                    if vtype == "table" then
-                        for k, v in pairs(value) do
-                            if validType[type(k)] and not visited[k] then
-                                size = size + 1
-                                queue[size] = k
-                                visited[k] = true
-                            end
-                            if validType[type(v)] and not visited[v] then
-                                size = size + 1
-                                queue[size] = v
-                                visited[v] = true
-                            end
-                        end
-                    elseif vtype == "function" then
-                        if log then Log("   ", GetFuncDesc(value), "is assosiated with fileIndex", index) end
-                        functionToIndex[value] = index
-                        visited[value] = true
-
-                        local i = 1
-                        while true do
-                            local name, v = getupvalue(value, i)
-                            if name ~= nil then
-                                local id = upvalueid(value, i)
-                                upvalueidToFunc[id] = value
-
-                                if validType[type(v)] and not visited[v] then
-                                    size = size + 1
-                                    queue[size] = v
-                                    visited[v] = true
-                                end
-                            else
-                                break
-                            end
-                            i = i + 1
-                        end
-                    end
-                end
-            end
-        end
-
-        if log then Log("Separating functions into buckets based on their upvalues") end
-        local refList = references[0]
-        references[0] = nil
-        local index = 0
-
-        for fileIndex, list in pairs(references) do
-            for _, ref in ipairs(list) do
-                local func = ref.value
-                functionToIndex[func] = fileIndex
-
-                if log then Log(" ", GetFuncDesc(func), "is assosiated with file index", fileIndex) end
-
-                local i = 1
-                while true do
-                    local ln, lv = getupvalue(func, i)
-                    if ln ~= nil then
-                        local id = upvalueid(func, i)
-                        upvalueidToFunc[id] = func
-                    else
-                        break
-                    end
-                    i = i + 1
-                end
-            end
-        end
-
-        for _, ref in ipairs(refList) do
-            local func = ref.value
-            local myIndexes = {}
-
-            if log then Log("  Analyzing", GetFuncDesc(func)) end
-
-            local myIndex = functionToIndex[func]
-            if myIndex then
-                myIndexes[myIndex] = true
-                if log then Log("    This function's fileIndex was deducted based on captured return values, and it is", myIndex) end
-            else
-                -- no deducted index for this function, try to find shared upvalues
-                -- with other functions which do have fileIndex assosiated
-                local i = 1
-                while true do
-                    local ln, lv = getupvalue(func, i)
-                    if ln ~= nil then
-                        local id = upvalueid(func, i)
-                        if upvalueidToFunc[id] then
-                            local myIndex = functionToIndex[upvalueidToFunc[id]]
-                            myIndexes[myIndex] = true
-                            if log then Log("    Upvalue with id", id, "is refered to the bucket no.", myIndex) end
-                        else
-                            upvalueidToFunc[id] = func
-                            if log then Log("    Upvalue with id", id, "seems to be new") end
-                        end
-                    else
-                        break
-                    end
-                    i = i + 1
-                end
-
-                local myFirstIndex = next(myIndexes)
-                if myFirstIndex == nil then
-                    -- negative file indexes are used for these temporal buckets, to avoid conflict with real fileIndexes
-                    index = index - 1
-                    myIndex = index
-                    if log then Log("    All upvalues were new, introducing a new bucket with id", myIndex) end
-                else
-                    myIndex = myFirstIndex
-                    if log then Log("    This function shared upvalues with functions in the bucket no.", myIndex) end
-                    for i, _ in pairs(myIndexes) do
-                        if i ~= myIndex then
-                            for _, ref in ipairs(references[i]) do
-                                table.insert(references[myIndex], ref)
-                            end
-                            if log then Log("    Moving all functions from bucket no.", i, "to above bucket,",
-                                "since those functions are sharing upvalues") end
-                            references[i] = nil
-                        end
-                    end
-                end
-            end
-            functionToIndex[func] = myIndex
-            references[myIndex] = references[myIndex] or {}
-            table.insert(references[myIndex], ref)
-        end
+        SeparateReferencesByUpvalues(references, returnValuesByIndex)
     end
 
     local versions = 0
