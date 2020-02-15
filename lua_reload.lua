@@ -422,13 +422,13 @@ local function FindReferences(fileName)
 
     -- initialization
     local preallocateTable = module.PreallocateTable
-    local queueValue = queueValue or (preallocateTable and preallocateTable(queuePreallocationSize, 0) or {})
-    local queuePrevious = queuePrevious or (preallocateTable and preallocateTable(queuePreallocationSize, 0) or {})
-    local queueName = queueName or (preallocateTable and preallocateTable(queuePreallocationSize, 0) or {})
-    local queueType = queueType or (preallocateTable and preallocateTable(queuePreallocationSize, 0) or {})
+    local queueValue = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queuePrevious = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queueName = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queueType = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
     -- to store info about the local variable, for locals only
     -- TODO refactor it to not consist of tables, check GC usage
-    local queueLink = queueLink or (preallocateTable and preallocateTable(queuePreallocationSize, 0) or {})
+    local queueLink = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
     local queuePath = {} -- for debug purposes only
     local size = 0
     local visited = preallocateTable and preallocateTable(0, visitedPreallocationSize) or {}
