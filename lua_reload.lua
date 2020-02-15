@@ -1162,8 +1162,8 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
                                 local stackLevel = ref.link.stackLevel + 1
                                 local localId = ref.link.localId
                                 if log then
-                                    local ln, lv = getlocal(stackLevel, localId)
-                                    Log("  set local [", ln, "] at stack level", stackLevel, "at index", localId, "from [", lv, "] to [", currentValue, "]")
+                                    local name, value = getlocal(stackLevel, localId)
+                                    Log("  set local [", name, "] at stack level", stackLevel, "at index", localId, "from [", value, "] to [", currentValue, "]")
                                 end
                                 setlocal(stackLevel, localId, currentValue)
                             elseif type(ref.link.owner) == "function" then
