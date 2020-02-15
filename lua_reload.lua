@@ -70,6 +70,7 @@ local toBeReload = {}
 local loadedFilesList = {}
 local returnValuesMt = { __mode = "v" }
 local customErrorHandler = nil
+local functionSource = setmetatable({}, { __mode = "k" })
 
 local visitedGlobal = {}
 local queuePreallocationSize = 40000
@@ -404,9 +405,7 @@ local function requireNew(modname)
     end
 end
 
-local functionSource = setmetatable({}, { __mode = "k" })
-local FindReferences
-FindReferences = function(fileName)
+local function FindReferences(fileName)
     local references = {}
 
     if log then Log("[ref_search]  Searching for references started") end
