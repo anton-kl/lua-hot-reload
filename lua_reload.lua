@@ -958,6 +958,76 @@ local function SeparateReferencesByUpvalues(references, returnValuesByIndex)
     end
 end
 
+local function GetValueByRoute(routeStart, fileData1, traverseStartingPoint)
+    -- build route for this reference
+    local route = {}
+    local prev = routeStart
+    while prev do
+        table.insert(route, fileData1.queueLink[prev])
+        prev = fileData1.queuePrevious[prev]
+    end
+
+    -- print route
+    if log then
+        Log("  route:", #route, "steps")
+        for i = #route, 1, -1 do
+            local step = route[i]
+            local msg = "    " .. tostring(#route - i + 1) .. "."
+            for k,v in pairs(step) do
+                msg = msg .. " " .. tostring(k) .. " = " .. tostring(v)
+            end
+            Log(msg)
+        end
+    end
+
+    -- find a new value using above route
+    local newValueFound = true
+    local currentValue = traverseStartingPoint
+    local lastValue
+    for stepNumber = #route, 1, -1 do
+        lastValue = currentValue
+        local step = route[stepNumber]
+        local currentType = type(currentValue)
+        if currentType == "function" then
+            assert(step.upvalueName or step.env)
+            if step.upvalueName then
+                local i = 1
+                local found = false
+                while true do
+                    local name, value = getupvalue(currentValue, i)
+                    if name == nil then
+                        break
+                    elseif name == step.upvalueName then
+                        currentValue = value
+                        found = true
+                        break
+                    end
+                    i = i + 1
+                end
+                if not found then
+                    if log then
+                        Log("  wasn't able to take step no.", #route - stepNumber + 1,
+                            "in the new file, missing upvalue", step.upvalueName,
+                            "(originally at index", tostring(step.upvalueIndex) .. ")")
+                    end
+                    newValueFound = false
+                    break
+                end
+            elseif step.env then
+                currentValue = getfenv(currentValue)
+            end
+        elseif currentType == "table" then
+            assert(step.key or step.metatable)
+            if step.key then
+                currentValue = currentValue[step.key]
+            else
+                currentValue = getmetatable(currentValue)
+            end
+        end
+    end
+    return newValueFound, currentValue, lastValue
+end
+
 Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     reloadTimes = reloadTimes + 1
     if log then Log("*** Reloading", fileName, "***") end
@@ -1056,81 +1126,8 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         for name, _ in pairs(globalsAccessed) do
             data["global_" .. name] = _G[name]
         end
-        local traverseStartingPoint = data
         local fileData2 = traverse(data, fileName, visitedDuringSearch)
         local detectedTables = {}
-
-        local function GetValueByRoute(routeStart, fileData1, traverseStartingPoint)
-            -- build route for this reference
-            local route = {}
-            local prev = routeStart
-            while prev do
-                table.insert(route, fileData1.queueLink[prev])
-                prev = fileData1.queuePrevious[prev]
-            end
-
-            -- print route
-            if log then
-                Log("  route:", #route, "steps")
-                for i = #route, 1, -1 do
-                    local step = route[i]
-                    local msg = "    " .. tostring(#route - i + 1) .. "."
-                    for k,v in pairs(step) do
-                        msg = msg .. " " .. tostring(k) .. " = " .. tostring(v)
-                    end
-                    Log(msg)
-                end
-            end
-
-            -- find a new value using above route
-            local newValueFound = true
-            local currentValue = traverseStartingPoint
-            local lastValue
-            for stepNumber = #route, 1, -1 do
-                lastValue = currentValue
-                local step = route[stepNumber]
-                local currentType = type(currentValue)
-                if currentType == "function" then
-                    assert(step.upvalueName or step.env)
-                    if step.upvalueName then
-                        local i = 1
-                        local found = false
-                        while true do
-                            local ln, lv = getupvalue(currentValue, i)
-                            if ln ~= nil then
-                                if ln == step.upvalueName then
-                                    currentValue = lv
-                                    found = true
-                                    break
-                                end
-                            else
-                                break
-                            end
-                            i = i + 1
-                        end
-                        if not found then
-                            if log then
-                                Log("  wasn't able to take step no.", #route - stepNumber + 1,
-                                    "in the new file, missing upvalue", step.upvalueName,
-                                    "(originally at index", tostring(step.upvalueIndex) .. ")")
-                            end
-                            newValueFound = false
-                            break
-                        end
-                    elseif step.env then
-                        currentValue = getfenv(currentValue)
-                    end
-                elseif currentType == "table" then
-                    assert(step.key or step.metatable)
-                    if step.key then
-                        currentValue = currentValue[step.key]
-                    else
-                        currentValue = getmetatable(currentValue)
-                    end
-                end
-            end
-            return newValueFound, currentValue, lastValue
-        end
 
         if log then Log("\n*** UPDATING REFERENCES && SET ENVS OF THE NEW FUNCs TO ENV OF OLD ONES ***") end
 
@@ -1148,7 +1145,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
                             "(route#" .. routeIndex .. ")")
                     end
 
-                    local newValueFound, currentValue, lastValue = GetValueByRoute(routeStart, fileData1, traverseStartingPoint)
+                    local newValueFound, currentValue, lastValue = GetValueByRoute(routeStart, fileData1, data)
 
                     if not newValueFound then
                         if log then Log("  wasn't able to retrieve new value") end
