@@ -14,18 +14,11 @@ TODO:
     3. Override require() function
 ]]
 
--- if "inspect.lua" is accessible - load it
-local inspect
-if loadfile then
-    do
-        local file = loadfile("inspect.lua")
-        if file then
-            inspect = file()
-        end
-    end
-end
-
 local module = {}
+
+-- if "inspect.lua" is accessible - load it
+local exists, inspect = pcall( require, "inspect" )
+if not exists then inspect = nil end
 
 -- original function are set in the Inject() function
 local setfenvOriginal
