@@ -228,7 +228,7 @@ local function UpdateReturnValues(file, fileIndex, ...)
     return ...
 end
 
-local function GetReturnValues(...)
+local function Pack(...)
     return { n = select("#", ...), ... }
 end
 
@@ -1030,7 +1030,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     -- so instead we maintain the list of references, and check if a given
     -- function isn't is this list
     SetupChunkEnv(chunkOriginal, fileName, 0) -- fileIndex is irrelevant here
-    local returnValuesOriginal = GetReturnValues(chunkOriginal())
+    local returnValuesOriginal = Pack(chunkOriginal())
     if trackGlobals then
         trackGlobals = false
         _G = _GOriginal
@@ -1051,7 +1051,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         if log then Log("\n*** UPDATING FILE WITH INDEX", fileIndex, "***") end
         -- set env for newly loaded file to ensure that new functions has correct fileName and the fileIndex of the old file
         SetupChunkEnv(chunkNew, fileName, fileIndex)
-        local returnValuesNew = GetReturnValues(UpdateReturnValues(file, fileIndex, chunkNew()))
+        local returnValuesNew = Pack(UpdateReturnValues(file, fileIndex, chunkNew()))
         local data = {
             ["return_values"] = returnValuesNew
         }
