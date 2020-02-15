@@ -29,9 +29,7 @@ local iter = DoFileString(file1)
 assert(GlobalModule.subModule.Func() == 1001)
 assert(GlobalModule.subModule.Func() == 1002)
 
-WriteFileString(file2)
-local fn = GetTestFilename()
-LuaReload.ReloadFile(fn)
+ReloadFileFunc(file2)
 
 assert(GlobalModule.subModule.Func() == 2003)
 assert(GlobalModule.subModule.Func() == 2004)

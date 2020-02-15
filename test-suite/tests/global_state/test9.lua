@@ -41,10 +41,7 @@ assert(GlobalFunc() == 1002)
 assert(iter() == 3)
 assert(GlobalFunc() == 1004)
 
-WriteFileString(file2)
-local fn = GetTestFilename()
-LuaReload.ReloadFile(fn)
-
+ReloadFileFunc(file2)
 
 assert(GlobalFunc() == 2205)
 assert(GlobalFunc() == 2206)

@@ -54,10 +54,7 @@ assert(Module.first.second.third.Func() == 1002)
 assert(iter() == 3)
 assert(Module.first.second.third.Func() == 1004)
 
-WriteFileString(file2)
-local fn = GetTestFilename()
-LuaReload.ReloadFile(fn)
-
+ReloadFileFunc(file2)
 
 assert(Module.first.second.third.Func() == 2205)
 assert(Module.first.second.third.Func() == 2206)
