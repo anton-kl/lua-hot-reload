@@ -26,7 +26,7 @@ local t = DoFileString(file1)
 
 assert(t.Func() == 0)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(t.Func() == 0)
 assert(t.GetA() == 100)

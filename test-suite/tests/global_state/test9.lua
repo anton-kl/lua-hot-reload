@@ -41,7 +41,7 @@ assert(GlobalFunc() == 1002)
 assert(iter() == 3)
 assert(GlobalFunc() == 1004)
 
-ReloadFileFunc(file2)
+ReloadFileString(file2)
 
 assert(GlobalFunc() == 2205)
 assert(GlobalFunc() == 2206)

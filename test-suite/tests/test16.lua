@@ -44,7 +44,7 @@ local f2 = obj:GetFunc2()
 assert(f1() == 1)
 assert(f2() == 2)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(f1() == 3)
 assert(f2() == 4)

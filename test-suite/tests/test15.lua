@@ -29,6 +29,6 @@ local file2 = [=[
 local obj = DoFileString(file1)
 assert(obj:Func() == 10)
 assert(obj.Hello() == 100)
-DoFileString(file2)
+ReloadFileString(file2)
 assert(obj:Func() == 11)
 assert(obj.Hello() == 200)

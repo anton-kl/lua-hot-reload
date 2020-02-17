@@ -55,7 +55,7 @@ assert(obj:GetA() == 1)
 assert(f1() == 11)
 assert(f2() == 101)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj:GetA() == 2)
 assert(f1() == 12)

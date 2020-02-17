@@ -53,6 +53,6 @@ assert(func() == 100)
 collectgarbage()
 collectgarbage()
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func() == 200)

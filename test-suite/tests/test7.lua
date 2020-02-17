@@ -24,7 +24,7 @@ assert(func() == 1)
 assert(func() == 2)
 assert(select(2, func()) == nil)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func() == 4)
 assert(func() == 5)

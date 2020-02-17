@@ -1646,7 +1646,8 @@ function module.ReloadFile(fileName, ignoreTimestamp)
     if file and module.ShouldReload(fileName) then
         local timestamp = module.FileGetTimestamp(fileName)
         if timestamp > file.timestamp or ignoreTimestamp then
-            ReloadFile(fileName)
+            ScheduleReload(fileName)
+            ReloadScheduledFiles()
             return true
         end
     end

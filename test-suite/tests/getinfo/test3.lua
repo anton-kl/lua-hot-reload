@@ -43,7 +43,7 @@ t.a = 100
 DoFileString(file1)
 collectgarbage()
 collectgarbage()
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(f1() == 1)
 assert(f2() == 2)

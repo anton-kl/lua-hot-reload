@@ -42,7 +42,7 @@ local iter = DoFileString(file1)
 assert(Module.first.second.third.Func() == 1001)
 assert(Module.first.second.third.Func() == 1002)
 
-ReloadFileFunc(file2)
+ReloadFileString(file2)
 
 assert(Module.first.second.third.Func() == 2003)
 assert(Module.first.second.third.Func() == 2004)

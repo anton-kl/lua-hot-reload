@@ -26,10 +26,10 @@ assert(t.Func() == 100)
 t.a = 200
 assert(t.Func() == 200)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(t.Func() == 200)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(t.Func() == 200)

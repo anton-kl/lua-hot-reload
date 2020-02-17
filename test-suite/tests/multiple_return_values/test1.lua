@@ -25,7 +25,7 @@ local func, func2 = DoFileString(file1)
 assert(func() == 5)
 assert(func2() == 50)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func() == 10)
 assert(func2() == 100)

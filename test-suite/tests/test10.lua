@@ -65,7 +65,7 @@ collectgarbage()
 -- ensure "garbage" table was removed
 assert(#ref == 0)
 
-DoFileString(file2)
+ReloadFileString(file2)
 log("*** File has been reloaded ***")
 
 assert(obj.Func == nil)

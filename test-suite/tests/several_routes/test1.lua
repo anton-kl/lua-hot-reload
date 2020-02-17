@@ -41,7 +41,7 @@ assert(obj.memberFunc1() == 15)
 assert(obj.memberFunc2() == 25)
 assert(memberFunc2() == 25)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj.memberFunc1() == 100)
 assert(memberFunc2 == nil)

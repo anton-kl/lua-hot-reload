@@ -24,6 +24,6 @@ local a, b, c = DoFileString(file1)
 
 assert(c.f() == 5)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(c.f() == 10)

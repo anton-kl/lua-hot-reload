@@ -34,7 +34,7 @@ assert(iter == 0)
 f2()
 assert(f() == 0)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 f2()
 assert(f() == 1)

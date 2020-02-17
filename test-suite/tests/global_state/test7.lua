@@ -71,7 +71,7 @@ obj = nil
 assert(list[1](100) == 101)
 table.remove(list, 1)
 
-ReloadFileFunc(file2)
+ReloadFileString(file2)
 
 local obj = Module:new(1)
 obj:GetFunc()
@@ -79,7 +79,7 @@ obj = nil
 
 assert(list[1](100) == 1101)
 
-ReloadFileFunc(file3)
+ReloadFileString(file3)
 
 assert(list[1](100) == 2101)
 

@@ -39,6 +39,6 @@ local func = DoFileString(file1)
 assert(func() == 101)
 
 WriteFileString(fileNested2, "nested")
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func() == 202)

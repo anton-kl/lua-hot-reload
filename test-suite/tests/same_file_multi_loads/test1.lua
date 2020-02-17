@@ -26,7 +26,7 @@ assert(func1() == 3)
 assert(func2() == 1)
 assert(func2() == 2)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func1() == 5)
 assert(func2() == 4)

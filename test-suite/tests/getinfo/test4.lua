@@ -22,7 +22,7 @@ local f2 = DoFileString(file1)
 assert(f1() == 10)
 assert(f2() == 10)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(f1() == 1)
 assert(f1() == 2)

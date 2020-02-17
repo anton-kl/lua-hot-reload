@@ -29,6 +29,6 @@ local func = DoFileString(file1)
 
 assert(func() == 101)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func() == 102)

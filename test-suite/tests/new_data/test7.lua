@@ -41,7 +41,7 @@ local t = DoFileString(file1)
 assert(t.basic.f() == 1)
 assert(t.advanced.f() == 2)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(t.basic.f() == 10)
 assert(t.advanced.f() == 20)

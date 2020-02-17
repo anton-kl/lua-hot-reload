@@ -35,7 +35,7 @@ local calls, isNew = obj.Call()
 assert(calls == 1)
 assert(not isNew)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 local calls, isNew = obj.Call()
 assert(calls == 2)

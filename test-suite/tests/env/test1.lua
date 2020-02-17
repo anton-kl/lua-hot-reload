@@ -41,7 +41,7 @@ assert(func() == 5)
 local env = getfenv(func)
 assert(env.f() == 15)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(getfenv(func) == env)
 assert(func() == 10)

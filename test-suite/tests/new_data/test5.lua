@@ -31,6 +31,6 @@ obj.b = 2
 
 assert(obj.Func() == 1)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj.Func() == 2)

@@ -20,6 +20,6 @@ local t = DoFileString(file1)
 
 assert(t.data == nil)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(t.data == 10)

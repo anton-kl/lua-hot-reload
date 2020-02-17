@@ -30,7 +30,7 @@ local obj, m = DoFileString(file1)
 
 assert(obj.Func() == 10)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj.a == 100)
 assert(obj.b == 200)

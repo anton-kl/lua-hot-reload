@@ -39,6 +39,6 @@ local a = obj:Func()
 
 --assert(obj.func() == 5)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 --assert(obj.func() == 10)

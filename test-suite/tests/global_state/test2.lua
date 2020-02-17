@@ -29,7 +29,7 @@ local iter = DoFileString(file1)
 assert(GlobalModule.Func() == 1001)
 assert(GlobalModule.Func() == 1002)
 
-ReloadFileFunc(file2)
+ReloadFileString(file2)
 
 assert(GlobalModule.Func() == 2003)
 assert(GlobalModule.Func() == 2004)

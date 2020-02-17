@@ -20,6 +20,6 @@ log("HELLO", info.short_src)
 
 assert(func() == 5)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(func() == 10)

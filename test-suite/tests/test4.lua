@@ -32,7 +32,7 @@ local obj = DoFileString(file1)
 assert(obj.func() == 5)
 assert(obj.tRemoved.funcRemoved ~= nil)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj.func() == 10)
 assert(obj.tRemoved == nil)

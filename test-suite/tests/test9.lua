@@ -48,7 +48,7 @@ local NestedFunc = obj.GetNestedFunc()
 AssertCall({ 1, false }, obj.Func())
 AssertCall({ 2, false }, NestedFunc())
 
-DoFileString(file2)
+ReloadFileString(file2)
 local NestedFuncNew = obj.GetNestedFunc()
 log("*** File has been reloaded ***")
 

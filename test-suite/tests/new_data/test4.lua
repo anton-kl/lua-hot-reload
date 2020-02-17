@@ -38,7 +38,7 @@ local obj = DoFileString(file1).New()
 
 assert(obj:Func() == 0)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj:Func() == 0)
 assert(obj:GetA() == 100)

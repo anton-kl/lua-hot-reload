@@ -41,7 +41,7 @@ assert(t.f1() == 2)
 assert(t.f2() == 3)
 assert(t.f2() == 4)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 AssertCall({6, 0}, t.f1())
 AssertCall({8, 0}, t.f2())

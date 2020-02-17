@@ -36,7 +36,7 @@ assert(obj.func() == 5)
 assert(obj.funcRemoved ~= nil)
 assert(obj.funcAdded == nil)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj.func() == 10)
 assert(obj.funcRemoved == nil)

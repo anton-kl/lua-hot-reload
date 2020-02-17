@@ -24,6 +24,6 @@ local obj = DoFileString(file1)
 
 assert(obj.func() == 5)
 
-DoFileString(file2)
+ReloadFileString(file2)
 
 assert(obj.func() == 10)
