@@ -1,19 +1,5 @@
---[[
-
-Setup:
-    1. LuaReload overrides loadfile and dofile (and soon require) functions, in
-    order to control loading of the files. When file is loaded, an specific
-    environment is set to the resulted chunk. This environment contains info
-    about filename and file index (counter incremented on each load, so we can
-    distinguish functions from different loads of the same files).
-    2. ...
-
-TODO:
-    1. Add Lua5.2+ support
-    2. Update data for global modules (see handleGlobalModules and respective tests cases)
-    3. Override require() function
-]]
-
+-- This code requires major refactoring.
+-- Also see TODOs
 local module = {}
 
 -- if "inspect.lua" is accessible - load it
