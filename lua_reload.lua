@@ -1315,7 +1315,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
                 end
                 push({
                     current = upvaluesCurrent[k].value,
-                    new = upvaluesNew[k] and upvaluesNew[k].value or nil,
+                    new = upvaluesNew[k] and upvaluesNew[k].value, -- do not add `or nil` here because it will replace `false` `value` by `nil`
                     original = upvaluesOriginal[k].value
                 }, {
                     func = upvaluesCurrent[k].func,
