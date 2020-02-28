@@ -354,7 +354,16 @@ local loadfileNew = function(fileName)
                 end
             end
             SetupChunkEnv(chunk, fileName, fileIndex)
-            return StoreReturnValues(file, fileIndex, chunk(...))
+            if reloading then
+                -- during reloading we are may load files, but their return
+                -- values should not be referenced in the game, so we avoid
+                -- storing them because they won't be used
+                -- TODO return values may still be written into global variables
+                -- how should we handle this?
+                return chunk(...)
+            else
+                return StoreReturnValues(file, fileIndex, chunk(...))
+            end
         end
     else
         -- if file loading failed, and we didn't abort yet,
@@ -1050,15 +1059,23 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         SeparateReferencesByUpvalues(references, returnValuesByIndex)
     end
 
+    -- Update return values. If a file returns a table with data without functions,
+    -- there will be no references, but we should update return values anyway.
+    for index, _ in pairs(returnValuesByIndex) do
+        if not references[index] then
+            references[index] = {}
+            if log then
+                Log("adding empty reference list based on return values",
+                    "for file index", index)
+            end
+        end
+    end
+
     local versions = 0
     for _, _ in pairs(references) do
         versions = versions + 1
     end
     if log then Log("FOUND", versions, "VERSIONS OF THE", fileName, ":") end
-
-    -- nothing to update
-    -- TODO: we could consider update returned table anyways
-    if versions == 0 then return end
 
     if log then
         local version = 1
@@ -1100,7 +1117,6 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
 
     local fileData1 = traverse(data, fileName, visitedDuringSearch)
 
-
     local file = fileCache[fileName]
     for fileIndex, list in pairs(references) do
         if log then Log("\n*** UPDATING FILE WITH INDEX", fileIndex, "***") end
@@ -1117,6 +1133,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         local detectedTables = {}
 
         if log then Log("\n*** UPDATING REFERENCES && SET ENVS OF THE NEW FUNCs TO ENV OF OLD ONES ***") end
+        if log and #list == 0 then Log("There are no references for this file index - no functions to update.") end
 
         for refIndex, ref in ipairs(list) do
             local linedefined = getinfo(ref.value, "S").linedefined
