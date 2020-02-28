@@ -22,6 +22,7 @@ local handleGlobalModules = false
 
 -- logging related flags
 local log = true
+local logCacheAccess = true
 local logReferencesSteps = false
 local storeReferencePath = false
 local logUpvalues = false
@@ -293,7 +294,7 @@ local loadfileInternal = function(fileName)
         end
     elseif file then
         -- cache
-        if log then Log("Loading", fileName, "from cache") end
+        if logCacheAccess then Log("Loading", fileName, "from cache") end
     else
         -- load
         if log then
@@ -1490,6 +1491,10 @@ end
 
 function module.SetPrintReloadingLogs(enable)
     log = enable
+end
+
+function module.SetLogCacheAccess(enable)
+    logCacheAccess = enable
 end
 
 function module.SetLogReferencesSteps(enable)
