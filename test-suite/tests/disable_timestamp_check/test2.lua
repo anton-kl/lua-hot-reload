@@ -25,12 +25,16 @@ local file2 = [=[
 local func = DoFileString(file1)
 assert(func() == 1)
 
+-- TODO remove when vanilla Lua doesn't load new version of files
+-- by default (see loadFileNew)
+local isVanillaLua = type(jit) ~= "table"
+
 local func2 = DoFileString(file2)
-assert(func2() == 1)
+assert(isVanillaLua or func2() == 1)
 
 LuaReload.SetEnableTimestampCheck(false)
 
 local func3 = DoFileString(file2)
 assert(func() == 1)
-assert(func2() == 1)
+assert(isVanillaLua or func2() == 1)
 assert(func3() == 2)
