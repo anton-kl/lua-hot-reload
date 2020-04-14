@@ -50,6 +50,7 @@ local useGetInfo = _ENV ~= nil
     print(Func() == Func()) -- true on vanilla Lua
 ]]
 local loadFileFromSource = type(jit) ~= 'table'
+local enableTimestampCheck = true
 
 local Reload -- defined below
 local reloading = false
@@ -280,9 +281,9 @@ local loadfileInternal = function(fileName)
     local errorMessage
     local timestamp = module.FileGetTimestamp(fileName)
 
-    if file and timestamp > file.timestamp and module.ShouldReload(fileName) then
+    if file and (not enableTimestampCheck or timestamp > file.timestamp) and module.ShouldReload(fileName) then
         if reloading then
-            -- schedule
+            -- schedule to reload
             ScheduleReload(fileName)
         else
             -- reload
@@ -292,11 +293,11 @@ local loadfileInternal = function(fileName)
             -- during reloading of the above file
             ReloadScheduledFiles()
         end
-    elseif file then
-        -- cache
+    elseif file and enableTimestampCheck then
+        -- load from cache (if timestamp check is disabled always load from the file)
         if logCacheAccess then Log("Loading", fileName, "from cache") end
     else
-        -- load
+        -- load from file
         if log then
             local trace = logTrace and debug.traceback() or ""
             Log("Loading", fileName, trace)
@@ -1578,6 +1579,10 @@ function module.FileGetTimestamp(fileName)
     end
 end
 
+function module.SetEnableTimestampCheck(enable)
+    enableTimestampCheck = enable
+end
+
 local function GetTime()
     if chronos then
         return chronos.nanotime()
@@ -1649,6 +1654,9 @@ function module.ShouldReload(fileName)
 end
 
 function module.ReloadFile(fileName, ignoreTimestamp)
+    if ignoreTimestamp == nil then
+        ignoreTimestamp = not enableTimestampCheck
+    end
     -- check if this was loaded at least once (otherwise there is nothing to reload)
     local file = fileCache[fileName]
     if file and module.ShouldReload(fileName) then
