@@ -50,7 +50,10 @@ local useGetInfo = _ENV ~= nil
     print(Func() == Func()) -- true on vanilla Lua
 ]]
 local loadFileFromSource = type(jit) ~= 'table'
+-- set to false to always assume file has been changed when loading/reloading
 local enableTimestampCheck = true
+-- set to false to always load file from the disk ignoring cache
+local useCache = true
 
 local Reload -- defined below
 local reloading = false
@@ -293,7 +296,7 @@ local loadfileInternal = function(fileName)
             -- during reloading of the above file
             ReloadScheduledFiles()
         end
-    elseif file and enableTimestampCheck then
+    elseif file and enableTimestampCheck and useCache then
         -- load from cache (if timestamp check is disabled always load from the file)
         if logCacheAccess then Log("Loading", fileName, "from cache") end
     else
@@ -1545,6 +1548,10 @@ end
 
 function module.GetFileCache()
     return fileCache
+end
+
+function module.SetUseCache(enable)
+    useCache = enable
 end
 
 function module.SetUseOldFileOnError(enable)
