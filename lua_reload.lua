@@ -296,7 +296,7 @@ local loadfileInternal = function(fileName)
             -- during reloading of the above file
             ReloadScheduledFiles()
         end
-    elseif file and enableTimestampCheck and useCache then
+    elseif file and enableTimestampCheck and useCache and timestamp == file.timestamp then
         -- load from cache (if timestamp check is disabled always load from the file)
         if logCacheAccess then Log("Loading", fileName, "from cache") end
     else
