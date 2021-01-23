@@ -81,11 +81,17 @@ local upvaluejoin = debug.upvaluejoin
 -- to abort executing if isReloading is set to false, which means
 -- that this is the first time we load this file, so we can't use
 -- an older version of it
-local function HandleLoadError(fileName, errorMessage, isReloading)
+-- isExecuting is set to true when not just loading the file, but
+-- also executing in order to get its return values
+local function HandleLoadError(fileName, errorMessage, isReloading, isExecuting)
     if customErrorHandler then
-        customErrorHandler(fileName, errorMessage, isReloading)
+        customErrorHandler(fileName, errorMessage, isReloading, isExecuting)
     else
-        print("ERROR during loading of the " .. fileName .. ": " .. errorMessage .. ". " .. debug.traceback())
+        local msg = "ERROR during loading of the "
+        if isExecuting then
+            msg = "ERROR during execution of the "
+        end
+        print(msg .. fileName .. ": " .. errorMessage .. ". " .. debug.traceback())
     end
 end
 
@@ -259,11 +265,16 @@ local function ReloadFile(fileName)
     end
 
     reloading = true
-    Reload(fileName, file.chunk, chunk, file.returnValues)
+    local success, errorMessage = xpcall(Reload, debug.traceback, fileName, file.chunk, chunk, file.returnValues)
     reloading = false
 
-    file.chunk = chunk
     file.timestamp = module.FileGetTimestamp(fileName)
+    if success then
+        file.chunk = chunk
+    else
+        HandleLoadError(fileName, errorMessage, true, true)
+        return false, errorMessage
+    end
 
     return true
 end
