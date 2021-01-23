@@ -97,13 +97,14 @@ end
 
 local reloadTimes = 0
 local function Log(...)
-    local num = select("#", ...)
-    local arg = {...}
-    local prefix = "[LUAR]" .. (reloading and "[#" .. reloadTimes .. "]" or "") .. " "
-    local msg = prefix
-    for i = 1, num do
-        msg = msg .. tostring(arg[i]) .. " "
+    local nargs = select("#", ...)
+    local prefix = "[LUAR]" .. (reloading and "[#" .. reloadTimes .. "]" or "")
+    local args = {prefix}
+    for i = 1, nargs do
+        args[i + 1] = tostring( (select( i, ... )) )
     end
+
+    local msg = table.concat(args, " ")
     print( (msg:gsub("\n", "\n" .. prefix)) )
 end
 local function Error(...)
@@ -240,12 +241,23 @@ local function SetupChunkEnv(chunk, fileName, fileIndex)
 end
 
 local function ScheduleReload(fileName)
-    local trace = logTrace and debug.traceback() or ""
     if not toBeReload[fileName] then
-        if log then Log("SCHEDULE", fileName, "to be reloaded", trace) end
+        if log then
+            if logTrace then
+                Log("SCHEDULE", fileName, "to be reloaded", debug.traceback())
+            else
+                Log("SCHEDULE", fileName, "to be reloaded")
+            end
+        end
         toBeReload[fileName] = true
     else
-        if log then Log(fileName, "is already scheduled to be reloaded", trace) end
+        if log then
+            if logTrace then
+                Log(fileName, "is already scheduled to be reloaded", debug.traceback())
+            else
+                Log(fileName, "is already scheduled to be reloaded")
+            end
+        end
     end
 end
 
@@ -314,8 +326,11 @@ local function LoadFile(fileName)
     else
         -- load from file
         if log then
-            local trace = logTrace and debug.traceback() or ""
-            Log("Loading", fileName, trace)
+            if logTrace then
+                Log("Loading", fileName, debug.traceback())
+            else
+                Log("Loading", fileName)
+            end
         end
         table.insert(loadedFilesList, fileName)
         local chunk
