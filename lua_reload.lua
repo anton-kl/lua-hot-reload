@@ -1679,7 +1679,8 @@ function module.ReloadFile(fileName, ignoreTimestamp)
     if ignoreTimestamp == nil then
         ignoreTimestamp = not enableTimestampCheck
     end
-    -- check if this was loaded at least once (otherwise there is nothing to reload)
+    -- check if this file was loaded at least once
+    -- (otherwise there is nothing to reload)
     local file = fileCache[fileName]
     if file and module.ShouldReload(fileName) then
         local timestamp = module.FileGetTimestamp(fileName)
