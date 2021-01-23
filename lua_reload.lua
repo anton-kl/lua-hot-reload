@@ -1614,9 +1614,17 @@ local function GetTime()
     return 0
 end
 
+local function ToMs(duration)
+    return string.format("%.2f", duration * 1000) .. "ms"
+end
+
+local fileChangeWait = 0.02
 local monitorPtr = 1
-function module.Monitor(step, log)
+local monitoredFiles = {}
+function module.Monitor(step, log, logMonitorDuration)
     local momentStart = GetTime()
+
+    -- Find files which timestamp has changed
     local filesNumber = #loadedFilesList
     local filesToMonitor = step and math.min(filesNumber - 1, step) or filesNumber - 1
     local target = monitorPtr + filesToMonitor
@@ -1624,50 +1632,93 @@ function module.Monitor(step, log)
     for i = monitorPtr, target do
         local filename = loadedFilesList[i % filesNumber + 1]
         local cached = fileCache[filename]
-        if cached then
+        if cached and module.ShouldReload(filename) and not monitoredFiles[filename] then
             local timestamp = module.FileGetTimestamp(filename)
             if timestamp and timestamp > cached.timestamp then
                 local file = io.open(filename, "r")
+                local fileSize = nil
                 if file then
-                    local success = true
-                    if lfs then
-                        success = lfs.lock(file, "r")
-                        if success then
-                            lfs.unlock(file)
-                        end
-                    end
+                    fileSize = file:seek("end")
                     io.close(file)
-
-                    if success then
-                        if log then Log("Reloading", filename, "old timestamp:", cached.timestamp, "new timestamp:", timestamp) end
-                        ScheduleReload(filename)
-                        reloading = true
-                    else
-                        if log then Log("Failed to retrieve lock on a file") end
-                    end
+                end
+                local time = GetTime()
+                monitoredFiles[filename] = {
+                    monitorStartTime = time,
+                    lastChangeTime = time,
+                    fileSize = fileSize,
+                }
+                if log then
+                    Log("File", filename, "has changed on the disk, waiting for",
+                        ToMs(fileChangeWait), "till we assume it's finished writing into.")
                 end
             end
         end
     end
     monitorPtr = target + 1
-    if log then
+
+    -- Check if any of the file is finished writing into
+    local stopMonitoring = {}
+    for filename, data in pairs(monitoredFiles) do
+        local file = io.open(filename, "r")
+        if file then
+            local time = GetTime()
+            local fileSize = file:seek("end")
+            io.close(file)
+
+            if data.fileSize ~= fileSize then
+                if log then
+                    local timeDiff = time - data.lastChangeTime
+                    Log("Size of", filename, "changed from", data.fileSize,
+                        "to", fileSize, "in", ToMs(timeDiff) .. ", waiting for",
+                        ToMs(fileChangeWait), "till we assume it's finished writing into.")
+                end
+                data.fileSize = fileSize
+                data.lastChangeTime = time
+            else
+                if time - data.lastChangeTime > fileChangeWait then
+                    table.insert(stopMonitoring, filename)
+                end
+            end
+        end
+    end
+
+    -- Schedule for reload files that are ready
+    for _, filename in ipairs(stopMonitoring) do
+        if log then
+            Log("Reloading", filename, "file size:", monitoredFiles[filename].fileSize)
+        end
+        monitoredFiles[filename] = nil
+        ScheduleReload(filename)
+        reloading = true
+    end
+
+    -- Log how much time monitoring has took
+    if logMonitorDuration then
         local duration = GetTime() - momentStart
         local timeinfo = ""
         if duration > 0 then
-            timeinfo = "Monitoring took " .. string.format("%.3f", duration * 1000) .. "ms, "
+            timeinfo = "Monitoring took " .. ToMs(duration) .. ", "
         end
         Log(timeinfo .. "monitored", (filesToMonitor + 1) .. "/" .. filesNumber, "files")
     end
+
+    -- Reload the files
     if reloading then
         momentStart = GetTime()
-    end
-    ReloadScheduledFiles()
-    if reloading then
+
+        ReloadScheduledFiles()
+
         local duration = GetTime() - momentStart
         if duration > 0 then
-            Log("Reloading took", string.format("%.3f", duration * 1000) .. "ms" )
+            Log("Reloading took", ToMs(duration))
         end
     end
+
+    return reloading
+end
+
+function module.SetFileChangeWaitDuration(duration)
+    fileChangeWait = duration
 end
 
 -- this function is expected to be overridden by the game
