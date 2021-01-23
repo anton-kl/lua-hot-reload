@@ -1,9 +1,10 @@
--- This code requires major refactoring.
--- Also see TODOs
+--[[
+    Lua Hot Reload v0.9.0
+--]]
 local module = {}
 
 -- if "inspect.lua" is accessible - load it
-local exists, inspect = pcall( require, "inspect" )
+local exists, inspect = pcall(require, "inspect")
 if not exists then inspect = nil end
 
 -- original function are set in the Inject() function
@@ -279,7 +280,7 @@ local function ReloadScheduledFiles(files)
     end
 end
 
-local loadfileInternal = function(fileName)
+local function LoadFile(fileName)
     local file = fileCache[fileName]
     local errorMessage
     local timestamp = module.FileGetTimestamp(fileName)
@@ -323,10 +324,10 @@ local loadfileInternal = function(fileName)
     return file, errorMessage
 end
 
-local loadfileNew = function(fileName)
+local function loadfileNew(fileName)
     -- load the file into the cache (or get from the cache)
     -- also reload it automatically if it has changed
-    local file, errorMessage = loadfileInternal(fileName)
+    local file, errorMessage = LoadFile(fileName)
 
     if file and (not errorMessage or useOldFileOnError) then
         -- we do not return chunk directly, since each time it is executed,
@@ -359,7 +360,7 @@ local loadfileNew = function(fileName)
             end
             SetupChunkEnv(chunk, fileName, fileIndex)
             if reloading then
-                -- during reloading we are may load files, but their return
+                -- during reloading we may load files, but their return
                 -- values should not be referenced in the game, so we avoid
                 -- storing them because they won't be used
                 -- TODO return values may still be written into global variables
@@ -424,11 +425,15 @@ local function FindReferences(fileName)
     local preallocateTable = module.PreallocateTable
     local queueValue = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
     local queuePrevious = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    -- TODO we can consider filling queueName only when logging is enabled
     local queueName = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    -- TODO consider using queueType instead of calling type() at each step
+    -- Note: queueType code has to be added to all places where we add a new element
     local queueType = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
     -- to store info about the local variable, for locals only
     -- TODO refactor it to not consist of tables, check GC usage
     local queueLink = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    -- TODO consider removing it, since we are using GetReferencePath anyway
     local queuePath = {} -- for debug purposes only
     local size = 0
     local visited = preallocateTable and preallocateTable(0, visitedPreallocationSize) or {}
@@ -473,21 +478,18 @@ local function FindReferences(fileName)
         if not info then break end
         local localId = 1
         while true do
-            local ln, lv = getlocal(stackLevel, localId)
-            if ln ~= nil then
-                size = size + 1
-                queueValue[size] = lv
-                queuePrevious[size] = nil
-                queueName[size] = "[locals in " .. info.short_src .. "]/" .. tostring(ln)
-                queueType[size] = type(lv)
-                queueLink[size] = {
-                    stackLevel = stackLevel - 2, -- TODO fix this magic value
-                    localId = localId
-                }
-                if storePath then queuePath[size] = queueName[size] end
-            else
-                break
-            end
+            local name, value = getlocal(stackLevel, localId)
+            if name == nil then break end
+            size = size + 1
+            queueValue[size] = value
+            queuePrevious[size] = nil
+            queueName[size] = "[locals in " .. info.short_src .. "]/" .. tostring(name)
+            queueType[size] = type(value)
+            queueLink[size] = {
+                stackLevel = stackLevel - 2, -- TODO fix this magic value
+                localId = localId
+            }
+            if storePath then queuePath[size] = queueName[size] end
             localId = localId + 1
         end
         stackLevel = stackLevel + 1
@@ -592,18 +594,18 @@ local function FindReferences(fileName)
                 if storePath then queuePath[size] = currentPath .. "/mt" end
             end
         elseif currentType == "function" then
-            local target = false
+            local isTarget = false
             local env = getfenv(currentValue)
-            target = env and env._sourceFileName == fileName
+            isTarget = env and env._sourceFileName == fileName
             if not env and useGetInfo then
                 local info = functionSource[currentValue]
                 if not info then
                     info = getinfo(currentValue, "S")
                     functionSource[currentValue] = info
                 end
-                target = info.short_src == fileName
+                isTarget = info.short_src == fileName
             end
-            if target then
+            if isTarget then
                 local index = env and env._sourceFileIndex or 0
                 local list = references[index] or {}
                 table.insert(list, {
@@ -626,22 +628,20 @@ local function FindReferences(fileName)
                 visited[currentValue] = true
                 local i = 1
                 while true do
-                    local ln, lv = getupvalue(currentValue, i)
-                    if ln ~= nil then
-                        local t = type(lv)
-                        if t == "table" or t == "function" then
-                            size = size + 1
-                            queueValue[size] = lv
-                            queuePrevious[size] = ptr
-                            queueName[size] = ln
-                            queueLink[size] = {
-                                owner = currentValue,
-                                upvalueId = i
-                            }
-                            if storePath then queuePath[size] = currentPath .. "/" .. tostring(ln) end
-                        end
-                    else
-                        break
+                    local name, value = getupvalue(currentValue, i)
+                    if name == nil then break end
+                    
+                    local t = type(value)
+                    if t == "table" or t == "function" then
+                        size = size + 1
+                        queueValue[size] = value
+                        queuePrevious[size] = ptr
+                        queueName[size] = name
+                        queueLink[size] = {
+                            owner = currentValue,
+                            upvalueId = i
+                        }
+                        if storePath then queuePath[size] = currentPath .. "/" .. tostring(name) end
                     end
                     i = i + 1
                 end
@@ -658,9 +658,10 @@ local function FindReferences(fileName)
 end
 
 -- TODO use queueName instead of storing the whole path
-local function traverse(data, fileName, visitedDuringSearch)
+local function TraverseFileData(data, fileName, visitedDuringSearch)
     if log then Log("-> traverse", fileName) end
     local storePath = log
+    -- flags intended for debugging only
     local logContent = log and false
     local logPush = log and false
 
@@ -711,7 +712,7 @@ local function traverse(data, fileName, visitedDuringSearch)
             if not visitedDuringSearch[currentValue]
                 or (useGetInfo and not getfenv(currentValue))
             then
-                local target = false
+                local isTarget = false
                 local env = getfenv(currentValue)
                 if useGetInfo then
                     local info = functionSource[currentValue]
@@ -719,11 +720,11 @@ local function traverse(data, fileName, visitedDuringSearch)
                         info = getinfo(currentValue, "S")
                         functionSource[currentValue] = info
                     end
-                    target = info.short_src == fileName
+                    isTarget = info.short_src == fileName
                 else
-                    target = env and env._sourceFileName == fileName
+                    isTarget = env and env._sourceFileName == fileName
                 end
-                if target then
+                if isTarget then
                     local info = functionSource[currentValue]
                     if not info then
                         info = getinfo(currentValue, "S")
@@ -745,28 +746,25 @@ local function traverse(data, fileName, visitedDuringSearch)
                         visited[currentValue] = true
                         local i = 1
                         while true do
-                            local ln, lv = getupvalue(currentValue, i)
-                            if ln ~= nil then
-                                local upvalueid = upvalueid(currentValue, i)
-                                if upvalues[ln] and upvalues[ln].id ~= upvalueid then
-                                    Error("Two different upvalues with the same name found, please rename one of them. Upvalue `"
-                                        .. tostring(ln) .. "` referenced in", GetFuncDesc(upvalues[ln].func),
-                                        "and", GetFuncDesc(currentValue))
-                                end
-                                if logContent then Log("  - upvalue [", ln, "] = [", lv, "]") end
-                                upvalues[ln] = {
-                                    id = upvalueid,
-                                    func = currentValue,
-                                    index = i,
-                                    value = lv
-                                }
-                                local vtype = type(lv)
-                                if vtype == "function" or (vtype == "table" and not visited[lv]) then
-                                    -- TODO optimize out the string concatenation
-                                    push(lv, "upvalue " .. ln, ptr, { upvalueName = ln, upvalueIndex = i })
-                                end
-                            else
-                                break
+                            local name, value = getupvalue(currentValue, i)
+                            if name == nil then break end
+                            local upvalueid = upvalueid(currentValue, i)
+                            if upvalues[name] and upvalues[name].id ~= upvalueid then
+                                Error("Two different upvalues with the same name found, please rename one of them. Upvalue `"
+                                    .. tostring(name) .. "` referenced in", GetFuncDesc(upvalues[name].func),
+                                    "and", GetFuncDesc(currentValue))
+                            end
+                            if logContent then Log("  - upvalue [", name, "] = [", value, "]") end
+                            upvalues[name] = {
+                                id = upvalueid,
+                                func = currentValue,
+                                index = i,
+                                value = value
+                            }
+                            local vtype = type(value)
+                            if vtype == "function" or (vtype == "table" and not visited[value]) then
+                                -- TODO optimize out the string concatenation
+                                push(value, "upvalue " .. name, ptr, { upvalueName = name, upvalueIndex = i })
                             end
                             i = i + 1
                         end
@@ -879,11 +877,12 @@ local function SeparateReferencesByUpvalues(references, returnValuesByIndex)
     if log then Log("Separating functions into buckets based on their upvalues") end
     local refList = references[0]
     references[0] = nil
-    local index = 0
 
     for fileIndex, list in pairs(references) do
         for _, ref in ipairs(list) do
             local func = ref.value
+            assert(not functionToIndex[func] or functionToIndex[func] == fileIndex,
+                "DEV ERROR: somehow function is assigned to different file indexes based on its return values and upvalues")
             functionToIndex[func] = fileIndex
 
             if log then Log(" ", GetFuncDesc(func), "is associated with file index", fileIndex) end
@@ -900,19 +899,22 @@ local function SeparateReferencesByUpvalues(references, returnValuesByIndex)
         end
     end
 
+    -- we assign functions to negative file indexes, to avoid conflicting with existing file indexes
+    local myIndexNext = -1
     for _, ref in ipairs(refList) do
         local func = ref.value
-        local myIndexes = {}
-
         if log then Log("  Analyzing", GetFuncDesc(func)) end
 
         local myIndex = functionToIndex[func]
         if myIndex then
-            myIndexes[myIndex] = true
             if log then Log("    This function's fileIndex was deduced based on captured return values, and it is", myIndex) end
         else
             -- no deduced index for this function, try to find shared upvalues
-            -- with other functions which do have fileIndex associated
+            -- with other functions which do have fileIndex assigned to them
+            -- TODO think about if one function actually can have connections
+            -- to different upvalues (if they were found in different functions that weren't returned from a file)
+            local myIndexes = {}
+
             local i = 1
             while true do
                 if getupvalue(func, i) == nil then
@@ -933,9 +935,8 @@ local function SeparateReferencesByUpvalues(references, returnValuesByIndex)
 
             local myFirstIndex = next(myIndexes)
             if myFirstIndex == nil then
-                -- negative file indexes are used for these temporal buckets, to avoid a conflict with real fileIndexes
-                index = index - 1
-                myIndex = index
+                myIndex = myIndexNext
+                myIndexNext = myIndexNext - 1
                 if log then Log("    All upvalues were new, introducing a new bucket with id", myIndex) end
             else
                 myIndex = myFirstIndex
@@ -951,8 +952,9 @@ local function SeparateReferencesByUpvalues(references, returnValuesByIndex)
                     end
                 end
             end
+
+            functionToIndex[func] = myIndex
         end
-        functionToIndex[func] = myIndex
         references[myIndex] = references[myIndex] or {}
         table.insert(references[myIndex], ref)
     end
@@ -1035,13 +1037,14 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     if log then Log("\n*** LOOKING FOR REFERENCES ***") end
     local references, visitedDuringSearch = FindReferences(fileName)
 
-
     if log then Log("\n*** PREPARE RETURN VALUES BY INDEX  ***") end
     -- We store return values for all versions of the file in a one big table
     -- cause we want them to be automatically removed by gc (see returnValuesMt)
-    -- It's okay if we load file once in applications lifetime, use it,
-    -- remove all references and the entry in the table is still present
-    -- Worse if entries for each version of the file are present.
+    -- Obviously, if we load file once in applications lifetime, use it and
+    -- remove all references, the entry in table will still be present.
+    -- This is not considered a memory leak, but it could be if application
+    -- is generating lots of lua files. In this case its advised to disable
+    -- reloading for these files via overriding ShouldReload function.
     local returnValuesByIndex = {}
     for k, v in pairs(returnValues) do
         local t = returnValuesByIndex[k.fileIndex]
@@ -1084,7 +1087,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
     if log then
         local version = 1
         for index, list in pairs(references) do
-            Log(version .. ". ", fileName, "with index [", index, "]")
+            Log(version .. ".", fileName, "with index [", index, "]")
             for i, ref in ipairs(list) do
                 Log("  ref#" .. i, "at [", ref.path, "] to", GetFuncDesc(ref.value))
             end
@@ -1115,11 +1118,12 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         ["return_values"] = returnValuesOriginal
     }
     for name, _ in pairs(globalsAccessed) do
+        -- List of globals was already created during traversal of the original file
         data["global_" .. name] = _G[name]
         if log then Log("  schedule global [", name , "] to be traversed") end
     end
 
-    local fileData1 = traverse(data, fileName, visitedDuringSearch)
+    local fileData1 = TraverseFileData(data, fileName, visitedDuringSearch)
 
     local file = fileCache[fileName]
     for fileIndex, list in pairs(references) do
@@ -1133,7 +1137,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         for name, _ in pairs(globalsAccessed) do
             data["global_" .. name] = _G[name]
         end
-        local fileData2 = traverse(data, fileName, visitedDuringSearch)
+        local fileData2 = TraverseFileData(data, fileName, visitedDuringSearch)
         local detectedTables = {}
 
         if log then Log("\n*** UPDATING REFERENCES && SET ENVS OF THE NEW FUNCs TO ENV OF OLD ONES ***") end
