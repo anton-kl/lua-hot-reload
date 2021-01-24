@@ -62,6 +62,8 @@ local toBeReload = {}
 local loadedFilesList = {}
 local returnValuesMt = { __mode = "v" }
 local customErrorHandler = nil
+local customFileGetTimestamp = nil
+local customShouldReload = nil
 local functionSource = setmetatable({}, { __mode = "k" })
 
 local visitedGlobal = {}
@@ -93,6 +95,29 @@ local function HandleLoadError(fileName, errorMessage, isReloading, isExecuting)
         end
         print(msg .. fileName .. ": " .. errorMessage .. ". " .. debug.traceback())
     end
+end
+
+local staticTimestamp = 0
+local function FileGetTimestamp(fileName)
+    if customFileGetTimestamp then
+        return customFileGetTimestamp(fileName)
+    elseif lfs then
+        return lfs.attributes(fileName, "modification")
+    elseif love and love.filesystem.getInfo then
+        return love.filesystem.getInfo(fileName).modtime
+    elseif love and love.filesystem.getLastModified then
+        return love.filesystem.getLastModified(fileName)
+    else
+        staticTimestamp = staticTimestamp + 1
+        return staticTimestamp
+    end
+end
+
+local function ShouldReload(fileName)
+    if customShouldReload then
+        return customShouldReload(fileName)
+    end
+    return true
 end
 
 local reloadTimes = 0
@@ -280,7 +305,7 @@ local function ReloadFile(fileName)
     local success, errorMessage = xpcall(Reload, debug.traceback, fileName, file.chunk, chunk, file.returnValues)
     reloading = false
 
-    file.timestamp = module.FileGetTimestamp(fileName)
+    file.timestamp = FileGetTimestamp(fileName)
     if success then
         file.chunk = chunk
     else
@@ -306,9 +331,9 @@ end
 local function LoadFile(fileName)
     local file = fileCache[fileName]
     local errorMessage
-    local timestamp = module.FileGetTimestamp(fileName)
+    local timestamp = FileGetTimestamp(fileName)
 
-    if file and (not enableTimestampCheck or timestamp > file.timestamp) and module.ShouldReload(fileName) then
+    if file and (not enableTimestampCheck or timestamp > file.timestamp) and ShouldReload(fileName) then
         if reloading then
             -- schedule to reload
             ScheduleReload(fileName)
@@ -1588,7 +1613,6 @@ function module.SetUseOldFileOnError(enable)
     useOldFileOnError = enable
 end
 
-
 function module.SetUseGetInfo(enable)
     useGetInfo = enable
 end
@@ -1601,19 +1625,8 @@ function module.SetVisitedPreallocationSize(value)
     visitedPreallocationSize = value
 end
 
--- a game is expected to provide getTimestamp function
-local staticTimestamp = 0
-function module.FileGetTimestamp(fileName)
-    if lfs then
-        return lfs.attributes(fileName, "modification")
-    elseif love and love.filesystem.getInfo then
-        return love.filesystem.getInfo(fileName).modtime
-    elseif love and love.filesystem.getLastModified then
-        return love.filesystem.getLastModified(fileName)
-    else
-        staticTimestamp = staticTimestamp + 1
-        return staticTimestamp
-    end
+function module.SetFileGetTimestamp(func)
+    customFileGetTimestamp = func
 end
 
 function module.SetEnableTimestampCheck(enable)
@@ -1647,8 +1660,8 @@ function module.Monitor(step, log, logMonitorDuration)
     for i = monitorPtr, target do
         local filename = loadedFilesList[i % filesNumber + 1]
         local cached = fileCache[filename]
-        if cached and module.ShouldReload(filename) and not monitoredFiles[filename] then
-            local timestamp = module.FileGetTimestamp(filename)
+        if cached and ShouldReload(filename) and not monitoredFiles[filename] then
+            local timestamp = FileGetTimestamp(filename)
             if timestamp and timestamp > cached.timestamp then
                 local file = io.open(filename, "r")
                 local fileSize = nil
@@ -1736,9 +1749,8 @@ function module.SetFileChangeWaitDuration(duration)
     fileChangeWait = duration
 end
 
--- this function is expected to be overridden by the game
-function module.ShouldReload(fileName)
-    return true
+function module.SetShouldReload(func)
+    customShouldReload = func
 end
 
 function module.ReloadFile(fileName, ignoreTimestamp)
@@ -1748,8 +1760,8 @@ function module.ReloadFile(fileName, ignoreTimestamp)
     -- check if this file was loaded at least once
     -- (otherwise there is nothing to reload)
     local file = fileCache[fileName]
-    if file and module.ShouldReload(fileName) then
-        local timestamp = module.FileGetTimestamp(fileName)
+    if file and ShouldReload(fileName) then
+        local timestamp = FileGetTimestamp(fileName)
         if timestamp > file.timestamp or ignoreTimestamp then
             ScheduleReload(fileName)
             ReloadScheduledFiles()

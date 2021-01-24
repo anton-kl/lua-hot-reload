@@ -82,6 +82,6 @@ function ReloadFileFunc(func, postfix)
     LuaReload.ReloadFile(fn)
 end
 
-LuaReload.FileGetTimestamp = function(filename)
+LuaReload.SetFileGetTimestamp(function(filename)
     return filesTimestamp[ filename ]
-end
+end)

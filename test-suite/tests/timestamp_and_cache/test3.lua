@@ -1,9 +1,9 @@
 dofile("test_setup.lua")
 
 -- assume we don't have get_timestamp functionality
-LuaReload.FileGetTimestamp = function(_)
+LuaReload.SetFileGetTimestamp(function(_)
     return 0
-end
+end)
 
 local file1 = [=[
     return function()
