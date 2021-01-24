@@ -64,6 +64,7 @@ local returnValuesMt = { __mode = "v" }
 local customErrorHandler = nil
 local customFileGetTimestamp = nil
 local customShouldReload = nil
+local customPreallocateTable = nil
 local functionSource = setmetatable({}, { __mode = "k" })
 
 local visitedGlobal = {}
@@ -473,21 +474,30 @@ local function FindReferences(fileName)
     local traverseRegistry = traverseRegistry == nil and true or traverseRegistry
 
     -- initialization
-    local preallocateTable = module.PreallocateTable
-    local queueValue = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
-    local queuePrevious = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queueValue = {}
+    local queuePrevious = {}
     -- TODO we can consider filling queueName only when logging is enabled
-    local queueName = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queueName = {}
     -- TODO consider using queueType instead of calling type() at each step
     -- Note: queueType code has to be added to all places where we add a new element
-    local queueType = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queueType = {}
     -- to store info about the local variable, for locals only
     -- TODO refactor it to not consist of tables, check GC usage
-    local queueLink = preallocateTable and preallocateTable(queuePreallocationSize, 0) or {}
+    local queueLink = {}
     -- TODO consider removing it, since we are using GetReferencePath anyway
     local queuePath = {} -- for debug purposes only
     local size = 0
-    local visited = preallocateTable and preallocateTable(0, visitedPreallocationSize) or {}
+    local visited = {}
+
+    if customPreallocateTable then
+        queueValue = customPreallocateTable(queuePreallocationSize, 0)
+        queuePrevious = customPreallocateTable(queuePreallocationSize, 0)
+        queueName = customPreallocateTable(queuePreallocationSize, 0)
+        queueType = customPreallocateTable(queuePreallocationSize, 0)
+        queueLink = customPreallocateTable(queuePreallocationSize, 0)
+        visited = customPreallocateTable(0, visitedPreallocationSize)
+    end
+
     visited[fileCache] = true
     visited[fileCache[fileName]] = true
     visited[functionSource] = true
@@ -1751,6 +1761,10 @@ end
 
 function module.SetShouldReload(func)
     customShouldReload = func
+end
+
+function module.SetPreallocateTable(func)
+    customPreallocateTable = func
 end
 
 function module.ReloadFile(fileName, ignoreTimestamp)
