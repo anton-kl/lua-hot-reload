@@ -656,7 +656,7 @@ local function FindReferences(fileName)
                 while true do
                     local name, value = getupvalue(currentValue, i)
                     if name == nil then break end
-                    
+
                     local t = type(value)
                     if t == "table" or t == "function" then
                         size = size + 1
