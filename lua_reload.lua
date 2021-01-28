@@ -8,9 +8,9 @@ local exists, inspect = pcall(require, "inspect")
 if not exists then inspect = nil end
 
 -- original function are set in the Inject() function
-local setfenvOriginal
-local loadfileOriginal
-local requireOriginal
+local setfenvOriginal = setfenv
+local loadfileOriginal = loadfile
+local requireOriginal = require
 
 local fileCache = {}
 local fileIndexCounter = 1
@@ -37,6 +37,7 @@ local retrieveUpvaluesFromNestedFunctions = true
 -- getinfo as an additional source of information about functions, is used only
 -- for Lua5.2+ where we can't set ENV for every function (functions which
 -- doesn't use globals doesn't have ENVs)
+-- TODO shoudn't we instead of short_src be using the .source field?
 local useGetInfo = _ENV ~= nil
 -- In vanilla Lua, if a chunk creates a function, which doesn't have any upvalues
 -- (e.g. just return a result of some calculations), then even if execute this
@@ -1360,7 +1361,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         end
 
         for k in pairs(ignoreUpvalues) do
-            -- remove any upvalues that weren't sure are file-scope upvalues
+            -- remove any upvalues that we aren't sure are file-scope upvalues
             upvaluesCurrent[k] = nil
             if log then Log("Note: removing upvalue [", k, "] from the list, because we aren't sure if it's a file-scoped upvalue or not.") end
         end
@@ -1381,7 +1382,19 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
 
         local queue = {}
         local queueLink = {}
-        local visited = {}
+        local visited = {
+            -- when reloading lua_reload.lua, we have access to lua_reload's
+            -- tables via upvalues, and while this is by design we don't want to
+            -- update fileCache, since when loading new version of lua_reload.lua
+            -- to figure out what has changed (fileData2), it places info about
+            -- itself in its own upvalue fileCache, and we don't want this info
+            -- propagated into the current fileCache
+            [fileCache] = true,
+            -- lua_reload also stores a reference to _G, and we also don't want
+            -- to update it
+            [_G] = true,
+            [_GOriginal] = true,
+        }
         for k, v in pairs(visitedGlobal) do
             visited[k] = v
         end
@@ -1806,6 +1819,82 @@ function module.Inject()
     loadfile = loadfileNew
     dofile = dofileNew
     require = require and requireNew
+end
+
+-- Reloading lua_reload.lua itself is also possible thanks to the code below.
+-- Note, that it only edits the local variables, so as long as Inject() is not
+-- called from this file, we can execute this code however many times we want.
+-- Note: missing lua reload number when reloading lua_reload is a known
+-- side-effect of replacing upvalue Log of current function while it's still
+-- executing. After we update the upvalue reloadTimes of the Log function the
+-- issue is fixed.
+do
+    local infoMain = getinfo(1, "Sf")
+    local sourceMain = infoMain.source
+    -- Ensure this code was actually loaded from a file and not from a string
+    if sourceMain:sub(1, 1) == "@" then
+        local filenameMain = infoMain.source:sub(2)
+        local functions = {}
+
+        local function TryAddFunction(func)
+            if type(func) ~= "function" or functions[func] then
+                return
+            end
+
+            local info = getinfo(func, "S")
+            if info.what == "Lua" and info.source == sourceMain then
+                functions[func] = true
+            end
+        end
+
+        -- Gather all local functions
+        local localId = 1
+        while true do
+            local name, value = getlocal(1, localId)
+            if name == nil then break end
+            TryAddFunction(value)
+            localId = localId + 1
+        end
+
+        -- Gather all module functions
+        for _, v in pairs(module) do
+            TryAddFunction(v)
+        end
+
+        -- Setup ENV for all gathered functions
+        local fileIndex = fileIndexCounter
+        fileIndexCounter = fileIndexCounter + 1
+        for func, _ in pairs(functions) do
+            -- We don't use envMetatable since we don't need global tracking
+            local env = {
+                _sourceFileIndex = fileIndex,
+                _sourceFileName = filenameMain
+            }
+            local mt = {
+                __index = function(t, k)
+                    return _GOriginal[k]
+                end,
+                __newindex = function(t, k, v)
+                    _GOriginal[k] = v
+                end
+            }
+            setfenvOriginal(func, setmetatable(env, mt))
+        end
+
+        -- Add this file to the cache
+        local file = {
+            chunk = infoMain.func,
+            timestamp = FileGetTimestamp(filenameMain),
+            returnValues = setmetatable({}, returnValuesMt)
+        }
+        fileCache[filenameMain] = file
+
+        -- store the return values
+        StoreReturnValues(file, fileIndex, module)
+
+        -- Check for this file's changes during monitoring
+        table.insert(loadedFilesList, filenameMain)
+    end
 end
 
 return module
