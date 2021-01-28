@@ -163,7 +163,9 @@ local envMetatable = {
 
 local function GetFuncDesc(func)
     local info = getinfo(func)
-    return info.func, "defined in", info.short_src, "at", info.linedefined, "-", info.lastlinedefined
+    return tostring( info.func ) .. " defined in " .. tostring( info.short_src )
+        .. " at " .. tostring( info.linedefined ) .. "-"
+        .. tostring( info.lastlinedefined )
 end
 
 -- see https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -1541,7 +1543,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
         for _, ptrList in pairs(fileData2.functions) do
             local ptr = ptrList[1]
             local func = fileData2.queue[ptr]
-            if log then Log("- processing function", func, "in ptr", ptr) end
+            if log then Log("- processing", GetFuncDesc( func ), "in ptr", ptr) end
             local i = 1
             while true do
                 local ln, lv = getupvalue(func, i)
@@ -1550,7 +1552,7 @@ Reload = function(fileName, chunkOriginal, chunkNew, returnValues)
                     if upvalue_new then
                         upvaluejoin(func, i, upvalue_new.func, upvalue_new.index)
                         if log then
-                            Log("  link upvalue [", ln, "] to upvalue no.", upvalue_new.index, "from", upvalue_new.func,
+                            Log("  link upvalue [", ln, "] to upvalue no.", upvalue_new.index, "from", GetFuncDesc(upvalue_new.func),
                                 "(was [", lv, "] now [", select(2, getupvalue(upvalue_new.func, upvalue_new.index)), "])")
                         end
                     else
