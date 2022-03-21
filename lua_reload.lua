@@ -1550,6 +1550,10 @@ function module.GetFileCache()
     return fileCache
 end
 
+function module.ClearFileCache()
+    fileCache = {}
+end
+
 function module.SetUseCache(enable)
     useCache = enable
 end
