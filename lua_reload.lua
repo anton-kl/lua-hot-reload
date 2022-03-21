@@ -1698,4 +1698,8 @@ function module.Inject()
     require = require and requireNew
 end
 
+function module.ClearCache()
+    fileCache = {}
+end
+
 return module
