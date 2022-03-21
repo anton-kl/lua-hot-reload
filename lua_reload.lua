@@ -1550,6 +1550,10 @@ function module.GetFileCache()
     return fileCache
 end
 
+function module.ClearFileCache()
+    fileCache = {}
+end
+
 function module.SetUseCache(enable)
     useCache = enable
 end
@@ -1696,10 +1700,6 @@ function module.Inject()
     loadfile = loadfileNew
     dofile = dofileNew
     require = require and requireNew
-end
-
-function module.ClearCache()
-    fileCache = {}
 end
 
 return module
